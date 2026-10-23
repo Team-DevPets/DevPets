@@ -44,6 +44,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 
 ## 깃
 
+- 커밋 메시지 · 브랜치 · PR · 태그 규칙은 [깃-규칙.md](깃-규칙.md)에 정리해 두었다. **작업은 `<타입>/<설명>` 브랜치에서 하고 PR(Squash and merge)로 합친다. main 에 직접 푸시하지 않는다** (문서 한 줄 수정은 예외). 버전을 올리는 커밋은 `release: 0.4.18 — 제목` 형식으로 적고, 머지된 뒤 `v0.4.18` 태그를 붙인다.
 - 레포: [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) (main 브랜치). 이 폴더가 그대로 레포다.
 - Electron 런타임(`UsagiPet.exe` · dll · locales), `logs\`, `.claude\`, `release\`는 `.gitignore`로 뺀다. GitHub는 파일 한 개를 100MB까지만 받으므로 180MB인 실행 파일은 올릴 수 없다.
 - 클론한 사람은 `resources\app`에서 `npm install` → `npm start`. 시트는 `resources\app\pets`에서 찾으니 루트 `pets`를 복사하거나 junction으로 연결해야 춤·싸움이 나온다.
