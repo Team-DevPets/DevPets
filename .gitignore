@@ -17,7 +17,7 @@ node_modules/
 /*-win32-x64/
 
 # 개인 기록 · 로컬 설정
-/logs/
+logs/
 .claude/settings.local.json
 
 # 배포본 만들기 출력

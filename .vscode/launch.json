@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // F5 로 펫을 띄운다. resources\app 에서 npm install 을 먼저 해 두어야 한다.
+      // --user-data-dir 를 따로 주는 이유: 이미 떠 있는 우사기와 단일 인스턴스가 겹치면
+      // 새로 뜬 쪽이 바로 종료되고 기존 펫의 설정 창만 열린다. 따로 주면 나란히 뜬다.
+      "name": "우사기 펫 (디버그)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/resources/app",
+      "runtimeExecutable": "${workspaceFolder}/resources/app/node_modules/.bin/electron.cmd",
+      "program": "${workspaceFolder}/resources/app/main.js",
+      "args": ["--user-data-dir=${env:TEMP}/usagipet-debug"],
+      "console": "integratedTerminal",
+      "outputCapture": "std"
+    },
+    {
+      "name": "자동 테스트",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/resources/app",
+      "runtimeArgs": ["--test"],
+      "program": "${workspaceFolder}/resources/app/test",
+      "console": "integratedTerminal"
+    }
+  ]
+}

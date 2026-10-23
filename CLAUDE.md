@@ -52,6 +52,13 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 ## 실행 · 재시작 · 확인 방법
 
 - 실행: `UsagiPet.exe`. 이미 떠 있는데 한 번 더 실행하면 설정 창이 열린다 (단일 인스턴스).
+const fs = require('fs')
+const lines = fs.readFileSync('CLAUDE.md', 'utf8').split('\n')
+const i = lines.findIndex(l => l.includes('이미 떠 있는데 한 번 더 실행하면'))
+if (i < 0) throw new Error('실행 항목을 찾지 못함')
+lines.splice(i + 1, 0, fs.readFileSync(process.argv[1], 'utf8').replace(/\r?\n$/, ''))
+fs.writeFileSync('CLAUDE.md', lines.join('\n'))
+console.log('CLAUDE.md 수정 완료')
 - **main.js · renderer · preload를 고치면 앱을 완전히 종료(트레이 → 종료)하고 다시 실행**해야 적용된다. `pets\sprite.png`만 바꾸면 실행 중에 바로 다시 읽는다.
 - 테스트: `cd resources\app` → `npm test` (Node.js 필요. 상태 합치기·Codex 기록 읽기 테스트).
 - 문법 확인: `node --check main.js`.

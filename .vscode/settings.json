@@ -1,0 +1,21 @@
+{
+  // app-watch.ps1 은 UTF-8 BOM 이 없으면 한글이 깨진다. VS Code 가 BOM 을 지우지 않게 고정한다.
+  "[powershell]": {
+    "files.encoding": "utf8bom"
+  },
+
+  // 찾기(Ctrl+Shift+F)에서 제외 — 글꼴 218개와 로그·배포본이 결과를 덮는다.
+  "search.exclude": {
+    "**/node_modules": true,
+    "release": true,
+    "logs": true,
+    "resources/app/renderer/fonts": true
+  },
+
+  // 파일 감시 제외 — node_modules 가 크고, app-watch.log 는 1초마다 바뀌어 VS Code 가 계속 새로 읽는다.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "release/**": true,
+    "logs/**": true
+  }
+}
