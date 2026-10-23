@@ -3,6 +3,18 @@
 Windows 바탕화면 위에 떠 있는 우사기(치이카와) 펫. Claude 앱 · ChatGPT 앱 · Claude Code · Codex의 작업 상태를 보여 주고, 클릭·간식·춤 같은 상호작용을 한다.
 Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 묶지 않음). 소스를 고치면 바로 실행본이 바뀐다.
 
+## 지금 상태 (2026-10-23)
+
+새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
+
+- **버전 0.4.17.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` · `v0.4.17`.
+- 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로). 펫의 동작·모습은 0.4.16과 같다.
+- **배포본 ZIP을 만들어 뒀다**: `release\UsagiPet-0.4.17-win32-x64.zip` (118MB). GitHub Releases 업로드는 민준이 직접 할 예정이라 **아직 안 올라갔다.**
+- 디스크에 `resources\app\node_modules`(276MB)와 `release`(397MB)가 있다. 둘 다 깃 바깥이라 지워도 되고, 지우면 다시 `npm install`해야 F5 실행·배포본 만들기가 된다.
+- **main은 GitHub에서 보호되어 있다.** 직접 푸시는 거부되므로 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)).
+- 안 한 일: Electron 33.2.1에 high 2건 취약점 경고가 뜨지만 올리지 않았다. 올리면 창·트레이·알림·토스트를 전부 다시 확인해야 한다.
+- 남은 아이디어는 맨 아래 "남은 아이디어" 항목에 있다.
+
 ## 사용자와 일하는 방식
 
 - 사용자는 **민준**. 대화는 **한국어**로, 짧고 바로 쓸 수 있게. "무엇을 했는지"와 함께 "왜"를 한 줄로.
@@ -52,13 +64,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 ## 실행 · 재시작 · 확인 방법
 
 - 실행: `UsagiPet.exe`. 이미 떠 있는데 한 번 더 실행하면 설정 창이 열린다 (단일 인스턴스).
-const fs = require('fs')
-const lines = fs.readFileSync('CLAUDE.md', 'utf8').split('\n')
-const i = lines.findIndex(l => l.includes('이미 떠 있는데 한 번 더 실행하면'))
-if (i < 0) throw new Error('실행 항목을 찾지 못함')
-lines.splice(i + 1, 0, fs.readFileSync(process.argv[1], 'utf8').replace(/\r?\n$/, ''))
-fs.writeFileSync('CLAUDE.md', lines.join('\n'))
-console.log('CLAUDE.md 수정 완료')
+- VS Code: 이 폴더를 열면 **F5 → 우사기 펫 (디버그)** 로 띄울 수 있다 (`.vscode\launch.json`). 떠 있는 펫과 단일 인스턴스가 겹치지 않게 `--user-data-dir`를 따로 준다. 먼저 `resources\app`에서 `npm install`이 필요하고, 소스로 실행하면 로그가 `resources\app\logs\`에 쌓인다. Claude Code 패널은 Ctrl+Esc.
 - **main.js · renderer · preload를 고치면 앱을 완전히 종료(트레이 → 종료)하고 다시 실행**해야 적용된다. `pets\sprite.png`만 바꾸면 실행 중에 바로 다시 읽는다.
 - 테스트: `cd resources\app` → `npm test` (Node.js 필요. 상태 합치기·Codex 기록 읽기 테스트).
 - 문법 확인: `node --check main.js`.
@@ -67,9 +73,10 @@ console.log('CLAUDE.md 수정 완료')
 ## 버전 올리기 (매번)
 
 1. `resources\app\package.json`의 `version`을 올린다 (0.4.17 → 0.4.18 …).
-2. `패치노트.md` 맨 위(가장 최신 자리)에 `## 0.4.17 — 한 줄 제목` 항목 추가. **사용자용 쉬운 말**로, `**새 기능** / **개선** / **바뀐 점** / **버그 수정**` 중 맞는 것만.
-3. `README.md`의 "버전별 변경 내역" 아래에 `## 0.4.17에서 바뀐 점` 추가 — 설정 키·파일 형식까지 담은 자세한 기록.
+2. `패치노트.md` 맨 위(가장 최신 자리)에 `## 0.4.18 — 한 줄 제목` 항목 추가. **사용자용 쉬운 말**로, `**새 기능** / **개선** / **바뀐 점** / **버그 수정**` 중 맞는 것만.
+3. `README.md`의 "버전별 변경 내역" 아래에 `## 0.4.18에서 바뀐 점` 추가 — 설정 키·파일 형식까지 담은 자세한 기록.
 4. 루트와 `resources\app`의 `README.md` · `패치노트.md`를 같은 내용으로 맞춘다.
+5. 맨 위 **"지금 상태"** 항목의 버전·날짜와 달라진 내용을 갱신한다.
 
 ## 펫 시트 (pets\sprite.png)
 
