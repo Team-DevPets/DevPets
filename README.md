@@ -20,14 +20,47 @@ UsagiPet-0.3.2-win32-x64/
 
 펫 실행 자체에는 Node.js가 필요 없습니다. 선택 기능인 Claude Code 작업 연결은 Node.js를 설치하고 배포본 폴더에서 `node hooks/install.js`를 실행한 뒤 Claude Code를 다시 시작하세요.
 
-### 소스 코드로 실행
+### 소스 코드로 실행 — 깃에서 클론한 경우
 
-Node.js 18 이상에서 프로젝트 폴더를 열고 실행하세요.
+[Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) 레포에는 **소스만** 들어 있습니다. Electron 런타임(`UsagiPet.exe`와 DLL들)은 파일 하나가 180MB로 GitHub의 100MB 제한을 넘어서 올리지 않았습니다. `npm install`이 받아 주므로 **Node.js 18 이상**만 설치되어 있으면 됩니다.
 
 ```bash
+git clone https://github.com/Team-DevPets/DevPets.git
+cd DevPets/resources/app
 npm install
 npm start
 ```
+
+`package.json`은 레포 루트가 아니라 **`resources/app`** 안에 있습니다. 그 폴더가 곧 Electron 앱 본체여서 `npm` 명령은 모두 거기서 실행합니다.
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `npm start` | 펫 실행 |
+| `npm test` | 자동 테스트 (상태 합치기 · Codex 작업 기록 읽기) |
+
+#### 펫 시트 — 춤·싸움을 보려면 한 단계 더
+
+소스로 실행하면 펫은 **`resources/app/pets/sprite.png`** 를 찾지만, 레포의 시트는 루트 `pets` 폴더에 있습니다. 그대로 실행하면 내장 기본 시트(`assets/default-pet.png`, 11줄)가 적용되어 춤·싸움 같은 동작이 나오지 않습니다. `resources/app`에서 한 번만 가져다 두세요.
+
+```powershell
+Copy-Item ..\..\pets . -Recurse
+```
+
+복사본을 따로 두고 싶지 않으면 복사 대신 연결해도 됩니다 (관리자 권한 없이 됩니다).
+
+```powershell
+New-Item -ItemType Junction -Path pets -Target ..\..\pets
+```
+
+#### Claude Code · Codex 상태 연동
+
+**레포 루트**에서 아래를 실행하고 Claude Code를 다시 시작하세요. 제거는 `--uninstall`을 붙입니다.
+
+```bash
+node hooks/install.js
+```
+
+`package.json`의 `npm run hooks`는 `resources/app/hooks`를 가리키는데 그 폴더는 레포에 없으니, 위처럼 루트에서 실행해야 합니다. 같은 이유로 `npm run package:win`도 `scripts/package-win.js`가 레포에 없어서 동작하지 않습니다.
 
 ### Windows 배포본 다시 만들기
 
