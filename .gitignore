@@ -1,0 +1,21 @@
+# Electron 런타임 — 설치본에만 있는 파일 (UsagiPet.exe는 180MB로 GitHub 100MB 제한 초과)
+/UsagiPet.exe
+/*.dll
+/*.pak
+/*.bin
+/*.dat
+/locales/
+/LICENSE
+/LICENSES.chromium.html
+/version
+/vk_swiftshader_icd.json
+
+# 의존성 · 빌드 결과
+node_modules/
+/dist/
+/out/
+/*-win32-x64/
+
+# 개인 기록 · 로컬 설정
+/logs/
+.claude/settings.local.json

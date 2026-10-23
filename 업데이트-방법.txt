@@ -1,0 +1,15 @@
+우사기 펫 0.1.3 → 0.1.4 업데이트
+
+1. 실행 중인 펫을 종료하세요 (우클릭 → 종료).
+2. 이 ZIP 안의 파일을 기존 UsagiPet-0.1.3-win32-x64 폴더에 그대로 덮어쓰세요.
+   resources\app 의 main.js · preload.js · package.json · renderer\index.html
+   hooks 의 install.js · pet-status.js
+   README.md · 시작하기.txt
+   (UsagiPet.exe, DLL, assets\default-pet.png, pets 폴더는 그대로 둡니다.)
+3. UsagiPet.exe를 다시 실행하세요.
+4. Claude Code 작업 알림을 쓰고 있었다면 우클릭 메뉴의
+   "Claude Code 작업 알림 연결"을 한 번 끄고 다시 켠 뒤 Claude Code를 다시 시작하세요.
+   (새 hook 스크립트로 바뀌고, 여러 세션·오류 표시가 적용됩니다.)
+
+소스 프로젝트(claude_pet)에 반영할 때는 resources\app 안의 파일을 프로젝트 루트에,
+hooks 폴더의 파일을 프로젝트의 hooks 폴더에 넣으면 됩니다.

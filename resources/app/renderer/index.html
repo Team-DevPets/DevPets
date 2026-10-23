@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'unsafe-inline'" />
+<link rel="stylesheet" href="fonts/fonts.css" />
+<title>Claude 책상 펫</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  body { font-family: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; color: #49382F; cursor: default; touch-action: none; }
+  #pet, #sprite { cursor: grab; touch-action: none; }
+  body.dragging { cursor: grabbing; }
+  #stage { position: relative; width: 180px; height: 100%; }
+  /* 말풍선: 첫 줄은 우사기 말(굵게), 둘째 줄부터 괄호 속 뜻(작게).
+     높이를 고정하지 않고, 뜻은 펫 위(또는 아래) 남은 공간에 들어가는 줄 수까지 보여 준다 (--lines). */
+  #bubble {
+    position: absolute; left: 50%; top: 4px; transform: translateX(-50%);
+    width: max-content; max-width: 168px; box-sizing: border-box; overflow-wrap: anywhere; padding: 6px 12px 7px; border-radius: 14px;
+    background: #FFFEFA; color: #49382F; line-height: 1.35; box-shadow: 0 2px 6px rgba(73,56,47,.12);
+    border: 1.5px solid #DDD0BE; opacity: 0; transition: opacity .2s ease-out; pointer-events: none; text-align: center;
+  }
+  #bubble .word { font-family: "Jua", "Noto Sans KR", sans-serif; font-size: 16px; line-height: 21px; font-weight: 400; word-break: keep-all; }
+  #bubble .mean {
+    margin-top: 1px; font-size: 11px; color: #78675C; white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 6); overflow: hidden;
+  }
+  #bubble::after {
+    content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; box-sizing: border-box;
+    background: #FFFEFA; border-right: 1.5px solid #DDD0BE; border-bottom: 1.5px solid #DDD0BE; border-bottom-right-radius: 3px;
+    transform: translateX(-50%) rotate(45deg);
+  }
+  #bubble.show { opacity: 1; }
+  #bubble.below::after { bottom: auto; top: -6px; transform: translateX(-50%) rotate(225deg); }
+  #pet { position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%); width: 130px; height: 130px; overflow: visible; }
+  #pet.idle    { animation: breathe 3.2s ease-in-out infinite; }
+  #pet.working { animation: wiggle .55s ease-in-out infinite; }
+  #pet.waiting { animation: hop .9s ease-in-out infinite; }
+  #pet.done    { animation: bounce .6s ease-out 3; }
+  #pet.error   { animation: shake .3s linear 4; }
+  #pet.walk-right { animation: walk .35s ease-in-out infinite; }
+  #pet.walk-left  { animation: walkL .35s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.03, .97); } }
+  @keyframes wiggle  { 0%,100% { transform: translateX(-50%) rotate(-2deg); } 50% { transform: translateX(-50%) rotate(2deg); } }
+  @keyframes hop     { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-10px); } }
+  @keyframes bounce  { 0% { transform: translateX(-50%) translateY(0); } 40% { transform: translateX(-50%) translateY(-18px); } 100% { transform: translateX(-50%) translateY(0); } }
+  @keyframes shake   { 0%,100% { transform: translateX(-50%); } 25% { transform: translateX(-56%); } 75% { transform: translateX(-44%); } }
+  @keyframes walk    { 0%,100% { transform: translateX(-50%) translateY(0) rotate(-2deg); } 50% { transform: translateX(-50%) translateY(-4px) rotate(2deg); } }
+  @keyframes walkL   { 0%,100% { transform: translateX(-50%) scaleX(-1) translateY(0) rotate(2deg); } 50% { transform: translateX(-50%) scaleX(-1) translateY(-4px) rotate(-2deg); } }
+  /* 고개·눈은 커서를 따라 부드럽게 */
+  #head { transform-origin: 60px 96px; transition: transform .18s ease-out; }
+  #face { transition: transform .16s ease-out; }
+  #browL, #browR { transition: transform .2s ease-out; }
+  #sprite { position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%); display: none;
+    width: 180px; height: calc(100% - 120px); transform-origin: 50% 85%; transition: transform .18s ease-out; }
+  .heart { position: absolute; font-size: 16px; pointer-events: none; animation: rise 1s ease-out forwards; }
+  @keyframes rise { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-50px) scale(1.4); } }
+  /* ---- AI 아이콘 (Claude · GPT) ----
+     작업 중: 캐릭터 둘레 타원 궤도 + 파란 호가 도는 링 (뒤쪽 반바퀴는 캐릭터 뒤로)
+     확인 대기: 머리 옆에 멈춰 살짝 떠 있음 + 노란 링 펄스 + ! 표시
+     오류: 머리 옆에 멈춤 + 빨간 링 + ! 표시
+     완료: 초록 링으로 한 번 커졌다가 위로 사라짐 */
+  #sprite, #pet { z-index: 1; }
+  .ai { position: absolute; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; opacity: 0; will-change: transform, opacity; }
+  .ai .face {
+    position: absolute; inset: 0; border-radius: 50%; background: #fff; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.28); display: flex; align-items: center; justify-content: center;
+    font: 12px/1 "Jua", sans-serif; color: #49382F;
+  }
+  .ai .face img { width: 84%; height: 84%; object-fit: contain; }
+  .ai.dark .face { background: #3B302A; }
+  .ai.fallback .face { background: #FAEBC2; }
+  .ai.hover .face { box-shadow: 0 0 0 2px rgba(73,56,47,.55), 0 1px 3px rgba(73,56,47,.28); }
+  .ai .ring { position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; box-sizing: border-box; }
+  /* 상태는 색과 모양을 함께 바꾼다: 도는 호(작업) / 깜빡이는 링 + ?(확인 대기) / 링 + !(오류) / 링 + ✓(완료) */
+  .ai[data-state="working"] .ring { border-color: rgba(169,120,28,.22); border-top-color: #A9781C; animation: ai-spin 1.1s linear infinite; }
+  .ai[data-state="waiting"] .ring { border-color: #D9798A; animation: ai-pulse 1.4s ease-out infinite; }
+  .ai[data-state="error"] .ring { border-color: #C9573F; }
+  .ai[data-state="done"] .ring { border-color: #6E9150; }
+  .ai .flag {
+    position: absolute; right: -5px; top: -6px; width: 11px; height: 11px; border-radius: 50%; display: none;
+    font-size: 0; text-align: center; color: #FFFEFA; box-shadow: 0 0 0 1.5px #FFFEFA;
+  }
+  .ai .flag::after { font: 700 8px/11px "Noto Sans KR", sans-serif; content: "!"; }
+  .ai[data-state="waiting"] .flag { display: block; background: #B8475C; }
+  .ai[data-state="waiting"] .flag::after { content: "?"; }
+  .ai[data-state="error"] .flag { display: block; background: #B4432E; }
+  .ai[data-state="done"] .flag { display: block; background: #4F7A35; }
+  .ai[data-state="done"] .flag::after { content: "✓"; }
+  @keyframes ai-spin { to { transform: rotate(360deg); } }
+  @keyframes ai-pulse { 0% { box-shadow: 0 0 0 0 rgba(217,121,138,.55); } 100% { box-shadow: 0 0 0 7px rgba(217,121,138,0); } }
+
+  /* ---- 마우스를 올리면 보이는 AI 상태 카드 ---- */
+  #card {
+    position: absolute; left: 50%; top: 0; width: 172px; box-sizing: border-box; padding: 8px 10px 7px; border-radius: 14px;
+    background: #FFFEFA; border: 1.5px solid #DDD0BE; color: #49382F; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 12px rgba(73,56,47,.14);
+    opacity: 0; transform: translate(-50%, 4px); transition: opacity .16s ease-out, transform .16s ease-out; pointer-events: none; z-index: 4;
+  }
+  #card.show { opacity: 1; transform: translate(-50%, 0); }
+  #card .row { display: flex; align-items: center; gap: 6px; }
+  #card .row + .row, #card .sub + .row { margin-top: 5px; }
+  #card .ico { width: 14px; height: 14px; border-radius: 50%; flex: none; background: #FFFEFA; box-shadow: 0 0 0 1px #DDD0BE; display: flex; align-items: center; justify-content: center; overflow: hidden; font: 8px/1 "Jua", sans-serif; color: #49382F; }
+  #card .ico img { width: 84%; height: 84%; object-fit: contain; }
+  #card .ico.dark { background: #3B302A; box-shadow: none; }
+  #card .ico.fallback { background: #FAEBC2; box-shadow: none; }
+  #card .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #card .time { margin-left: auto; color: #78675C; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #card .state { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  /* 상태 이름은 설정 창의 상태 알약과 같은 색 (색 점 + 글자) */
+  #card .state b { font-weight: 500; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 15px; padding: 0 5px 0 4px; border-radius: 999px; color: #49382F; }
+  #card .state span { color: #78675C; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #card .dot { width: 5px; height: 5px; border-radius: 50%; flex: none; }
+  #card .working b { background: #FAEBC2; } #card .working .dot { background: #A9781C; }
+  #card .waiting b { background: #F8CDD3; } #card .waiting .dot { background: #B8475C; }
+  #card .error b { background: #F7D2C9; } #card .error .dot { background: #B4432E; }
+  #card .done b { background: #DDE9CF; } #card .done .dot { background: #4F7A35; }
+  #card .sub { padding-left: 20px; font-size: 10.5px; margin-top: 2px; }
+  #card .detail {
+    padding-left: 20px; margin-top: 2px; font-size: 10.5px; color: #78675C; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--detail-lines, 3); overflow: hidden;
+  }
+  #card .hint { margin-top: 6px; padding-top: 4px; border-top: 1px solid #EFE5D6; color: #78675C; font-size: 10px; text-align: center; }
+  @media (prefers-reduced-motion: reduce) { .ai .ring { animation: none !important; } #card { transition: none; } }
+  #bubble { z-index: 3; }
+  #badge {
+    z-index: 3;
+    position: absolute; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+    border: 1.5px solid #FFFEFA; box-shadow: 0 1px 2px rgba(73,56,47,.25); display: none; pointer-events: none;
+  }
+  #badge.working { display: block; background: #A9781C; }
+  #badge.waiting { display: block; background: #B8475C; }
+  #badge.done    { display: block; background: #4F7A35; }
+  #badge.error   { display: block; background: #B4432E; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+
+  /* ---- 우사기 상호작용 효과 (간식·춤·도토리·낮잠·화내기) ---- */
+  .fx { position: absolute; pointer-events: none; z-index: 2; line-height: 1; user-select: none; }
+  .food { font-size: 22px; transform: translate(-50%, 0); transition: top .5s cubic-bezier(.5,0,.75,0), transform .2s ease-out, opacity .3s; }
+  .acorn { font-size: 17px; transform: translate(-50%, 0); transition: transform .3s ease-out, opacity .4s; }
+  .crumb { width: 4px; height: 4px; border-radius: 50%; background: #C9925A; animation: crumb .6s ease-out forwards; }
+  @keyframes crumb { to { transform: translate(var(--dx), 18px); opacity: 0; } }
+  .note { font: 16px/1 "Jua", sans-serif; color: #A9781C; animation: note 1.4s ease-out forwards; }
+  @keyframes note { 0% { opacity: 0; transform: translate(0, 0) rotate(-10deg); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), -46px) rotate(12deg); } }
+  .spark { font-size: 11px; color: #E2B53E; animation: spark .7s ease-out forwards; }
+  @keyframes spark { 0% { opacity: 0; transform: scale(.4); } 40% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: scale(.6) translateY(-8px); } }
+  .anger { font-size: 16px; animation: anger .9s ease-out forwards; }
+  @keyframes anger { 0% { opacity: 0; transform: scale(.4); } 30% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1); } }
+  .zzz { font: 14px/1 "Jua", sans-serif; color: #78675C; animation: zzz 2.4s ease-out infinite; }
+  @keyframes zzz { 0% { opacity: 0; transform: translate(0, 0) scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(14px, -30px) scale(1.15); } }
+  #sprite.dancing { animation: dance .52s ease-in-out infinite; }
+  @keyframes dance { 0%,100% { transform: translateX(-50%) rotate(-7deg) translateY(0); } 25% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } 50% { transform: translateX(-50%) rotate(7deg) translateY(0); } 75% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } }
+  #sprite.huff { animation: huff .32s linear 3; }
+  @keyframes huff { 0%,100% { transform: translateX(-50%); } 25% { transform: translateX(calc(-50% - 4px)); } 75% { transform: translateX(calc(-50% + 4px)); } }
+  /* 낮잠: 옆으로 누워 도라야키를 덮는다 */
+  /* 몸 가운데를 축으로 눕힌다 (축·내려갈 거리는 펫 크기에 맞춰 startNap 에서 정한다) */
+  #sprite.napping { transition: transform .5s ease-in-out; transform: translateX(-50%) translateY(var(--nap-dy, 0px)) rotate(-84deg) !important; }
+  #sprite.waking { transition: transform .45s ease-out; }
+  .blanket { transition: transform .5s ease-out, opacity .5s ease-out; transform: translate(-50%, 0); }
+  .blanket.off { opacity: 0; transform: translate(-10%, 10px) rotate(14deg); }
+  .blanket.breathe svg { animation: breathe2 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes breathe2 { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(1.05); } }
+  @media (prefers-reduced-motion: reduce) { #sprite.dancing, #sprite.huff, .zzz, .blanket.breathe svg { animation: none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bubble"></div>
+  <svg id="pet" class="idle" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <g id="head">
+      <g id="ears"></g>
+      <path id="body" stroke="#2b2520" stroke-width="2.6" stroke-linejoin="round" />
+      <g id="extras"></g>
+      <g id="face">
+        <g id="brows" fill="none" stroke="#2b2520" stroke-width="2.4" stroke-linecap="round">
+          <path id="browL" /><path id="browR" />
+        </g>
+        <g id="eyes" fill="#2b2520">
+          <g id="eyeL"></g>
+          <g id="eyeR"></g>
+        </g>
+        <g id="cheeks" fill="#ffb3b8" opacity=".75"><ellipse cx="34" cy="78" rx="7" ry="4.5"/><ellipse cx="86" cy="78" rx="7" ry="4.5"/></g>
+        <path id="mouth" fill="none" stroke="#2b2520" stroke-width="2.4" stroke-linecap="round" />
+        <g id="fx"></g>
+      </g>
+    </g>
+  </svg>
+  <canvas id="sprite" width="180" height="180"></canvas>
+  <div id="badge"></div>
+  <div class="ai" id="ai-claude"><div class="ring"></div><div class="face"></div><div class="flag">!</div></div>
+  <div class="ai" id="ai-gpt"><div class="ring"></div><div class="face"></div><div class="flag">!</div></div>
+  <div id="card" role="status"></div>
+</div>
+
+<script>
+  // 화면에서 난 오류는 감지 기록(logs\app-watch.log)에 남긴다
+  window.addEventListener('error', e => { try { window.pet.reportError(`${e.message} @${String(e.filename || '').split('/').pop()}:${e.lineno || ''}`) } catch {} })
+  window.addEventListener('unhandledrejection', e => { try { window.pet.reportError(`unhandled ${e.reason && e.reason.message ? e.reason.message : e.reason}`) } catch {} })
+  // 살짝 울퉁불퉁한 손그림 윤곽선 (원 대신 흔들리는 폴리곤)
+  function wobbly(cx, cy, rx, ry, seed) {
+    const pts = []
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2
+      const w = 1 + 0.025 * Math.sin(a * 5 + seed) + 0.018 * Math.cos(a * 3 - seed)
+      pts.push([cx + Math.cos(a) * rx * w, cy + Math.sin(a) * ry * w])
+    }
+    let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+    for (let i = 1; i <= pts.length; i++) {
+      const p = pts[i % pts.length]
+      const q = pts[(i + 1) % pts.length]
+      d += ` Q${p[0].toFixed(1)},${p[1].toFixed(1)} ${((p[0] + q[0]) / 2).toFixed(1)},${((p[1] + q[1]) / 2).toFixed(1)}`
+    }
+    return d + ' Z'
+  }
+  const OUT = '#2b2520'
+  const SPECIES = {
+    // 기본: 모찌 — 하얗고 동글동글, 머리에 새싹 하나
+    mochi:   { body: '#fffdf9', shape: wobbly(60, 72, 44, 40, 1.3), ears: '', extras: `<path d="M60,32 Q58,20 64,14" stroke="${OUT}" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M63,18 Q72,12 72,20 Q66,24 63,18 Z" fill="#9ed19a" stroke="${OUT}" stroke-width="2"/>` },
+    cat:     { body: '#f6d6a3', shape: wobbly(60, 70, 43, 39, 0.4), ears: `<path d="M22,46 L30,16 L50,38 Z M98,46 L90,16 L70,38 Z" fill="#f6d6a3" stroke="${OUT}" stroke-width="2.6" stroke-linejoin="round"/>`, extras: `<path d="M8,82 Q-2,62 18,54" stroke="${OUT}" stroke-width="2.4" fill="none" stroke-linecap="round"/>` },
+    dog:     { body: '#d6ab7a', shape: wobbly(60, 70, 43, 39, 2.1), ears: `<path d="M16,42 Q6,72 22,82 Q34,64 32,38 Z M104,42 Q114,72 98,82 Q86,64 88,38 Z" fill="#9a6a44" stroke="${OUT}" stroke-width="2.6" stroke-linejoin="round"/>`, extras: `<ellipse cx="60" cy="84" rx="5.5" ry="3.8" fill="${OUT}"/>` },
+    rabbit:  { body: '#fbf7f2', shape: wobbly(60, 72, 42, 38, 0.9), ears: `<path d="M38,42 Q30,-4 50,8 Q58,24 52,42 Z M82,42 Q90,-4 70,8 Q62,24 68,42 Z" fill="#fbf7f2" stroke="${OUT}" stroke-width="2.6" stroke-linejoin="round"/><path d="M40,38 Q36,8 48,12 Q52,24 50,38 Z M80,38 Q84,8 72,12 Q68,24 70,38 Z" fill="#ffc9d1"/>`, extras: '' },
+    penguin: { body: '#3b4a5c', shape: wobbly(60, 72, 42, 40, 1.7), ears: '', extras: `<path d="${wobbly(60, 82, 28, 26, 0.2)}" fill="#ffffff" stroke="none"/><path d="M53,80 L60,87 L67,80 Z" fill="#f5a623" stroke="${OUT}" stroke-width="1.6"/>` },
+    dragon:  { body: '#8fd394', shape: wobbly(60, 72, 43, 40, 2.8), ears: `<path d="M28,46 L22,12 L48,36 Z M92,46 L98,12 L72,36 Z" fill="#5aa862" stroke="${OUT}" stroke-width="2.6" stroke-linejoin="round"/>`, extras: `<path d="M100,72 Q124,68 118,92 Q108,84 98,88" fill="#8fd394" stroke="${OUT}" stroke-width="2.4"/><circle cx="60" cy="40" r="3.5" fill="#5aa862"/><circle cx="48" cy="46" r="2.5" fill="#5aa862"/><circle cx="72" cy="46" r="2.5" fill="#5aa862"/>` },
+  }
+
+  // 우사기는 말을 못 해서 외침만 한다.
+  //   야하: 신날 때·반가울 때     후응: '맞아' (긍정)        우~라~: 거대하다 / 엄청난 걸 봤을 때 감탄
+  //   하아?: 뭐냐고 물을 때·깜짝 놀랐을 때·짜증 날 때        우아(우마): 맛있다
+  //   우냐: 가자!                 우라우라: 가보자고! / 기분이 좋을 때        푸루루: 흥얼흥얼
+  // 뜻은 괄호 안에 적는데, 평소 말과 AI 소식 각각 메뉴에서 보이기를 켜고 끈다 (config.meaningBasic / meaningAI).
+  // 평소 말(쓰다듬기·혼잣말·인사) [우사기 말, 뜻] — 기본은 외침만
+  const LINES = {
+    idle:     [['푸루루…', '흥얼흥얼~ 심심하다'], ['야하~', '나 여기 있어!'], ['우라우라~', '기분 좋아!'], ['우마…', '맛있는 거 먹고 싶다'], ['후응', '맞아, 오늘도 잘하고 있어']],
+    pat:      [['후응~', '맞아, 거기 좋아!'], ['우라우라~', '기분 좋아!'], ['야하~', '헤헤'], ['푸루루~', '간지러워']],
+    near:     [['하아?', '뭐야? 왜?'], ['야하!', '반가워!'], ['후응!', '맞아, 나 여기 있어']],
+    greeting: [['야하~!', '안녕! 나 왔어'], ['우라우라~', '오늘도 가보자고!']],
+  }
+  // AI(LLM) 소식 [우사기 말, 뜻] — 기본은 뜻까지
+  const AI_LINES = {
+    working: [['우냐!', '가자! AI가 일하는 중'], ['우라우라!', '가보자고! AI가 일하는 중'], ['후응!', '맞아, 잘 되고 있어']],
+    waiting: [['하아?', '이거 해도 돼? 확인해 줘!'], ['하아?!', '뭐야? 와서 봐 줘!']],
+    done:    [['우~라~!!', '엄청나! 다 끝났어!'], ['우라우라~!', '해냈다! 기분 좋아!'], ['야하~!', '끝났어!']],
+    error:   [['하아?!', '뭐야, 오류 났어!'], ['하아…', '짜증 나… 잘 안 됐어']],
+  }
+
+  // AI가 쓰는 도구 이름을 읽기 쉬운 말로 (Bash → 명령 실행, mcp__서버__도구 → 도구)
+  const TOOL_LABEL = {
+    Bash: '명령 실행', PowerShell: '명령 실행', shell: '명령 실행', exec_command: '명령 실행', local_shell: '명령 실행',
+    Read: '파일 읽기', Write: '파일 쓰기', Edit: '파일 고치기', MultiEdit: '파일 고치기', NotebookEdit: '노트북 고치기', apply_patch: '파일 고치기',
+    Grep: '내용 찾기', Glob: '파일 찾기', LS: '폴더 보기', WebSearch: '웹 검색', web_search: '웹 검색', WebFetch: '웹 페이지 읽기',
+    Task: '도우미에게 맡기기', Agent: '도우미에게 맡기기', TodoWrite: '할 일 정리', TaskCreate: '할 일 정리', TaskUpdate: '할 일 정리',
+    Skill: '스킬 쓰기', AskUserQuestion: '질문하기', ExitPlanMode: '계획 확인',
+  }
+  function prettyTool(name) {
+    if (TOOL_LABEL[name]) return TOOL_LABEL[name]
+    const mcp = /^mcp__.+?__(.+)$/.exec(name)
+    return mcp ? mcp[1].replace(/[_-]+/g, ' ') : name
+  }
+  function prettyDetail(detail) {
+    if (!detail) return ''
+    // hooks가 보내는 "Bash" 또는 "Bash 허용할까?" 모양만 바꾸고, 나머지 문장은 그대로 둔다.
+    const match = /^([A-Za-z][\w.-]*)( 허용할까\?)?$/.exec(detail.trim())
+    if (!match) return detail
+    return prettyTool(match[1]) + (match[2] ? ' 해도 돼?' : '')
+  }
+  function escapeText(text) {
+    return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+  }
+
+  const $ = id => document.getElementById(id)
+  let config = { species: 'rabbit', name: '우사기' }
+  let mood = 'idle'
+  let walking = 0
+  let blink = false
+  let cursor = { x: 0, y: 0, near: false }
+  let wasNear = false
+  let bubbleTimer = null
+  let blinkTimer = null
+  let badgeMood = 'idle'
+  let badgeTimer = null
+  function setBadge(state) {
+    clearTimeout(badgeTimer)
+    badgeMood = state
+    renderBadge()
+    if (state === 'done') badgeTimer = setTimeout(() => {
+      badgeMood = 'idle'
+      renderBadge()
+    }, 3000)
+  }
+  let roomAbove = Infinity
+  let visiblePet = { top: 96, bottom: 186, right: 120 }
+  function placeBubble() {
+    const b = $('bubble')
+    // 뜻 줄 수를 남은 공간에 맞춘다: 말풍선 테두리·여백·우사기 말 한 줄 = 약 38px, 뜻 한 줄 = 약 15px
+    const fitLines = space => Math.max(1, Math.floor((space - 38) / 15))
+    const spaceAbove = visiblePet.top - 12
+    const spaceBelow = window.innerHeight - visiblePet.bottom - 12
+    b.style.setProperty('--lines', fitLines(spaceAbove))
+    let height = b.offsetHeight
+    const below = roomAbove < height + 10 // 화면 위쪽 끝에 붙어 있으면 아래에
+    if (below) {
+      b.style.setProperty('--lines', fitLines(spaceBelow))
+      height = b.offsetHeight
+    }
+    b.classList.toggle('below', below)
+    b.style.top = (below ? visiblePet.bottom + 10 : visiblePet.top - height - 10) + 'px'
+    $('badge').style.left = (visiblePet.right - 10) + 'px'
+    $('badge').style.top = (visiblePet.bottom - 17) + 'px'
+  }
+
+  // ---- 상황별 눈/눈썹/입 ----
+  function eyeShape(m) {
+    if (blink && m !== 'error') return `<path d="M-6,0 Q0,2 6,0" stroke="${OUT}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`
+    switch (m) {
+      case 'working': return `<path d="M-6,1 Q0,-4 6,1" stroke="${OUT}" stroke-width="2.6" stroke-linecap="round" fill="none"/><circle cy="1" r="2.6"/>`
+      case 'waiting': return '<circle r="6.5"/><circle cx="2.2" cy="-2.2" r="2.4" fill="#fff"/>'
+      case 'done':    return `<path d="M-6,2 Q0,-6 6,2" stroke="${OUT}" stroke-width="2.8" stroke-linecap="round" fill="none"/>`
+      case 'error':   return `<path d="M0,0 m-5,0 a5,5 0 1,1 10,0 a3,3 0 1,1 -6,0 a1.5,1.5 0 1,1 3,0" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round"/>`
+      default:        return '<circle r="4.6"/><circle cx="1.8" cy="-1.8" r="1.6" fill="#fff"/>'
+    }
+  }
+  // 눈썹: 기본은 살짝 처진 선, 상황에 따라 올라가거나 찡그림
+  function brows(m) {
+    switch (m) {
+      case 'working': return ['M-7,-2 L7,2', 'M7,-2 L-7,2']        // 찡그림 (집중)
+      case 'waiting': return ['M-7,2 Q0,-5 7,0', 'M7,2 Q0,-5 -7,0'] // 번쩍
+      case 'done':    return ['M-7,1 Q0,-3 7,1', 'M7,1 Q0,-3 -7,1']
+      case 'error':   return ['M-7,-1 L7,3', 'M7,-1 L-7,3']
+      default:        return ['M-6,0 Q0,-2 6,0', 'M6,0 Q0,-2 -6,0']
+    }
+  }
+  function mouth(m) {
+    switch (m) {
+      case 'working': return 'M55,92 Q60,95 65,92'
+      case 'waiting': return 'M56,89 Q60,98 64,89 Q60,93 56,89'
+      case 'done':    return 'M50,88 Q60,100 70,88'
+      case 'error':   return 'M52,96 Q56,91 60,95 Q64,91 68,95'
+      default:        return 'M54,89 Q57,93 60,90 Q63,93 66,89'
+    }
+  }
+  function fx(m) {
+    switch (m) {
+      case 'working': return `<path d="M94,52 q4,8 0,12 q-4,-4 0,-12 Z" fill="#9ad8ff" stroke="${OUT}" stroke-width="1.4"/>`
+      case 'waiting': return `<text x="100" y="36" font-size="22" font-weight="700" fill="#f59e0b" stroke="${OUT}" stroke-width="1">!</text>`
+      case 'done':    return `<text x="10" y="40" font-size="14" fill="#f59e0b">✦</text><text x="98" y="30" font-size="11" fill="#f59e0b">✦</text>`
+      case 'error':   return `<text x="92" y="40" font-size="14" fill="#9ca3af">@</text>`
+      default:        return ''
+    }
+  }
+
+  // ---- 사용자 스프라이트 시트 (sprite.png 자동 인식, main.js 가 칸을 잘라서 보내줌) ----
+  let spriteTimer = null
+  let spriteFrame = 0
+  let spriteImg = null
+  let sheetAlpha = null   // 시트 전체의 투명도. 클릭 판정을 화면 캔버스를 읽지 않고 계산한다.
+  let drawn = null        // 마지막으로 그린 그림의 위치 { f, x, y, w, h } (캔버스 CSS 픽셀)
+  let lastPaint = ''
+  let idleVariant = 0
+  let drag = null
+  let patTimer = null
+  let interactive = null
+  let napped = false // 도라야키 이불 낮잠 중 (상호작용)
+
+  function buildAlpha(img) {
+    try {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.drawImage(img, 0, 0)
+      const rgba = ctx.getImageData(0, 0, c.width, c.height).data
+      const alpha = new Uint8Array(c.width * c.height)
+      for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3]
+      sheetAlpha = { data: alpha, width: c.width }
+    } catch {
+      sheetAlpha = null
+    }
+  }
+  // 창 기준 좌표가 지금 보이는 그림의 불투명한 픽셀 위인지
+  function spriteHit(clientX, clientY) {
+    if (!drawn || !sheetAlpha) return false
+    const rect = $('sprite').getBoundingClientRect()
+    let u = (clientX - rect.left - drawn.x) / drawn.w
+    if (drawn.flip) u = 1 - u
+    const v = (clientY - rect.top - drawn.y) / drawn.h
+    if (!(u >= 0 && v >= 0 && u < 1 && v < 1)) return false
+    const { f } = drawn
+    const sx = f.x + Math.floor(u * f.w), sy = f.y + Math.floor(v * f.h)
+    return sheetAlpha.data[sy * sheetAlpha.width + sx] >= 16
+  }
+  function blanketHit(x, y) {
+    const el = document.querySelector('.blanket')
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 30 && y <= r.bottom + 4
+  }
+  function updateInteractive() {
+    let hit = !!drag
+    let overPet = false
+    if (!hit && Number.isFinite(cursor.localX) && Number.isFinite(cursor.localY)) {
+      if (config.sprite) overPet = spriteHit(cursor.localX, cursor.localY) || (napped && blanketHit(cursor.localX, cursor.localY))
+      else {
+        const element = $('pet')
+        const node = document.elementFromPoint(cursor.localX, cursor.localY)
+        overPet = !!node && node !== element && element.contains(node)
+      }
+      // 도는 아이콘도 누를 수 있게 마우스를 받는다.
+      hit = overPet || !!aiAt(cursor.localX, cursor.localY)
+    }
+    if (typeof updateHover === 'function') updateHover(overPet)
+    if (hit !== interactive) {
+      interactive = hit
+      window.pet.setInteractive(hit)
+    }
+  }
+  let reaction = null
+  let animName = '' // 지금 그리는 동작 이름 (잰걸음 그림을 왼쪽으로 뒤집을 때 쓴다)
+  function spriteAnim() {
+    const sp = config.sprite
+    const dashing = Math.abs(walking) === 2
+    const name = drag ? 'dragging' : reaction || (napped && sp.animations.nap ? 'nap'
+      : walking ? (dashing && sp.animations.dash ? 'dash' : walking < 0 && sp.animations.walkLeft ? 'walkLeft' : 'walk')
+      : mood === 'done' ? 'idle' : mood)
+    animName = name
+    if (sp.animations[name]) return { ...sp.animations[name], fps: name === 'idle' && config.calmMode ? 2 : dashing && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
+    if (name === 'walk' && sp.animations.idle) return sp.animations.idle
+    // 남는 줄이 있으면 쉬는 중일 때 번갈아 보여준다
+    if (name === 'idle' && sp.extras.length) return sp.extras[idleVariant % sp.extras.length]
+    return sp.animations.idle || Object.values(sp.animations)[0] || { frames: [], fps: 1 }
+  }
+  function paintFrame() {
+    const sp = config.sprite
+    const anim = spriteAnim()
+    if (!spriteImg || !spriteImg.complete || !spriteImg.naturalWidth || !anim.frames.length) return
+    const gaze = sp.gaze || []
+    const looking = gaze.length === 16 && cursor.near && !drag && !reaction && !walking && !napped && !cursor.centered && Number.isInteger(cursor.direction)
+    const fit = looking ? sp.gazeFit : anim
+    const f = looking ? gaze[cursor.direction] : anim.frames[spriteFrame % anim.frames.length]
+    const c = $('sprite')
+    // Layout stays in CSS pixels; only the backing bitmap grows for sharp rendering.
+    const width = c.clientWidth, height = c.clientHeight
+    const resolution = Math.max(2, window.devicePixelRatio || 1)
+    // 모든 동작을 쉬기 그림 기준의 같은 배율로 그린다. 캔버스를 넘칠 때만 그 동작 전체를 함께 줄인다.
+    const scale = Math.min((sp.height || 120) / (sp.refHeight || fit.maxExtent), (width - 10) / fit.maxW, (height - 6) / fit.maxExtent)
+    const w = f.w * scale, h = f.h * scale
+    let x = f.cx != null ? width / 2 - (f.cx - f.x) * scale : (width - w) / 2 // 몸 중심이 있으면 몸을 가운데에
+    const flip = !looking && animName === 'dash' && walking < 0
+    if (flip) x = width - x - w
+    const y = height - 6 - h - (f.lift || 0) * scale // 점프처럼 떠 있는 그림은 바닥선에서 띄워 그린다
+    const signature = `${f.x},${f.y},${f.w},${f.h},${x.toFixed(2)},${y.toFixed(2)},${width},${height},${resolution},${sp.key},${flip}`
+    if (signature !== lastPaint) {
+      lastPaint = signature
+      const pixelWidth = Math.round(width * resolution), pixelHeight = Math.round(height * resolution)
+      if (c.width !== pixelWidth || c.height !== pixelHeight) {
+        c.width = pixelWidth
+        c.height = pixelHeight
+      }
+      const ctx = c.getContext('2d')
+      ctx.setTransform(c.width / width, 0, 0, c.height / height, 0, 0)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.clearRect(0, 0, width, height)
+      if (flip) {
+        ctx.save(); ctx.translate(x + w, y); ctx.scale(-1, 1)
+        ctx.drawImage(spriteImg, f.x, f.y, f.w, f.h, 0, 0, w, h)
+        ctx.restore()
+      } else ctx.drawImage(spriteImg, f.x, f.y, f.w, f.h, x, y, w, h)
+      drawn = { f, x, y, w, h, flip }
+      // 말풍선은 동작마다 가장 높은 지점 기준으로 고정해 프레임마다 흔들리지 않게 한다.
+      visiblePet = { top: c.offsetTop + height - 6 - fit.maxExtent * scale, bottom: c.offsetTop + height - 6, right: (width + w) / 2 }
+      placeBubble()
+    }
+    updateInteractive()
+  }
+  function spriteTick() {
+    spriteFrame++
+    if (reaction && !drag && spriteFrame >= spriteAnim().frames.length) {
+      react(null)
+      return
+    }
+    paintFrame()
+  }
+  function react(name) {
+    reaction = config.sprite?.animations[name] ? name : null
+    if (config.sprite) restartSprite()
+  }
+  function restartSprite() {
+    clearInterval(spriteTimer)
+    spriteFrame = 0
+    paintFrame()
+    if (napped && !(config.sprite && config.sprite.animations.nap)) return // 낮잠 그림이 없으면 첫 그림에서 멈춘 채 눕는다
+    spriteTimer = setInterval(spriteTick, 1000 / Math.max(1, spriteAnim().fps || 6))
+  }
+  function drawSprite() {
+    const sp = config.sprite
+    $('pet').style.display = 'none'
+    $('sprite').style.display = 'block'
+    lastPaint = ''
+    if (!spriteImg || spriteImg.dataset.key !== sp.key) {
+      clearInterval(spriteTimer)
+      drawn = null
+      sheetAlpha = null
+      const img = new Image()
+      img.dataset.key = sp.key
+      img.onload = () => {
+        if (spriteImg !== img) return
+        buildAlpha(img)
+        restartSprite()
+      }
+      img.src = sp.url
+      spriteImg = img
+    } else restartSprite()
+    renderBadge()
+    look()
+  }
+  setInterval(() => { idleVariant++ ; if (!config.calmMode && config.sprite && mood === 'idle' && !walking) restartSprite() }, 12000)
+
+  function draw() {
+    if (config.sprite && config.sprite.url) return drawSprite()
+    clearInterval(spriteTimer)
+    spriteImg = null
+    sheetAlpha = null
+    drawn = null
+    $('sprite').style.display = 'none'
+    $('pet').style.display = ''
+    const svgSize = Math.round(130 * (config.petHeight || 90) / 90) + 'px'
+    $('pet').style.width = $('pet').style.height = svgSize
+    // SVG 요소에는 offsetTop이 없어서 실제 화면 위치로 계산한다 (몸통은 viewBox 120 기준 약 18~102, 바닥 약 112).
+    const svgRect = $('pet').getBoundingClientRect()
+    visiblePet = { top: svgRect.top, bottom: svgRect.top + svgRect.height * 112 / 120, right: svgRect.left + svgRect.width * 102 / 120 }
+    placeBubble()
+    const s = SPECIES[config.species] || SPECIES.mochi
+    $('body').setAttribute('fill', s.body)
+    $('body').setAttribute('d', s.shape)
+    $('ears').innerHTML = s.ears
+    $('extras').innerHTML = s.extras
+    $('eyeL').innerHTML = eyeShape(mood)
+    $('eyeR').innerHTML = eyeShape(mood)
+    const [bl, br] = brows(mood)
+    $('browL').setAttribute('d', bl)
+    $('browR').setAttribute('d', br)
+    $('mouth').setAttribute('d', mouth(mood))
+    $('fx').innerHTML = fx(mood)
+    $('pet').className.baseVal = walking ? (walking < 0 ? 'walk-left' : 'walk-right') : config.calmMode ? 'idle' : mood
+    renderBadge()
+    look()
+  }
+
+  // ---- 커서 쳐다보기: 고개 기울기 + 눈·눈썹 이동 ----
+  function look() {
+    const { x, y, near } = cursor.near ? cursor : { x: 0, y: 0, near: false }
+    const tilt = x * (config.calmMode ? 3 : 9)
+    const nod = y * (config.calmMode ? 1 : 2.5)
+    if (config.sprite && config.sprite.url) {
+      if (drag) return
+      if (config.sprite.gaze?.length === 16) {
+        $('sprite').style.transform = 'translateX(-50%)'
+        paintFrame()
+        return
+      }
+      const flip = walking < 0 ? ' scaleX(-1)' : ''
+      $('sprite').style.transform = `translateX(-50%) rotate(${tilt * 0.6}deg) translateY(${nod}px)${flip}`
+      return
+    }
+    $('head').style.transform = `rotate(${tilt}deg) translateY(${nod}px)`
+    const ex = x * 6, ey = y * 4                 // 얼굴 전체(눈·눈썹·입)가 커서 쪽으로
+    $('face').style.transform = `translate(${ex}px, ${ey}px)`
+    const lift = near ? -3 : (y < -0.3 ? -1.5 : 0) // 가까이 오면 눈썹 올리고 눈 커짐
+    $('eyeL').setAttribute('transform', `translate(${44 + x * 2},${70 + y * 1.5}) scale(${near ? 1.15 : 1})`)
+    $('eyeR').setAttribute('transform', `translate(${76 + x * 2},${70 + y * 1.5}) scale(${near ? 1.15 : 1})`)
+    $('browL').style.transform = `translate(${44 + x * 2}px, ${56 + lift}px)`
+    $('browR').style.transform = `translate(${76 + x * 2}px, ${56 + lift}px)`
+  }
+
+  // 우사기 말 + (뜻). 글이 길수록 오래 보여 준다 (최대 9초).
+  function say(word, meaning = '', ms) {
+    const b = $('bubble')
+    b.innerHTML = `<div class="word">${escapeText(word)}</div>` + (meaning ? `<div class="mean">(${escapeText(meaning)})</div>` : '')
+    placeBubble()
+    b.classList.add('show')
+    clearTimeout(bubbleTimer)
+    const duration = ms ?? Math.min(9000, 1600 + (word.length + meaning.length) * 90)
+    bubbleTimer = setTimeout(() => b.classList.remove('show'), duration)
+  }
+  const pick = list => list[Math.floor(Math.random() * list.length)]
+  const showBasicMeaning = () => config.meaningBasic === true
+  const showAiMeaning = () => config.meaningAI !== false
+  // 평소 말: 우사기 말 (+ 뜻이 켜져 있으면 괄호 속 뜻)
+  function sayBasic(key, ms) {
+    const [word, meaning] = pick(LINES[key])
+    say(word, showBasicMeaning() ? meaning : '', ms)
+  }
+  // AI 소식: 우사기 말 (+ 뜻이 켜져 있으면 괄호 속 뜻과 지금 하는 일)
+  function sayAi(word, meaning, ms) {
+    say(word, showAiMeaning() ? meaning : '', ms)
+  }
+  function sayMood(moodName, detail) {
+    if (!AI_LINES[moodName]) return
+    const [word, meaning] = pick(AI_LINES[moodName])
+    const extra = prettyDetail(detail)
+    sayAi(word, extra ? `${meaning}\n${extra}` : meaning)
+  }
+
+  function hearts(x, y) {
+    for (let i = 0; i < 3; i++) {
+      const h = document.createElement('div')
+      h.className = 'heart'
+      h.textContent = ['💛', '🧡', '❤️'][i]
+      h.style.left = x - 8 + (i - 1) * 16 + 'px'
+      h.style.top = y - 10 + 'px'
+      h.style.animationDelay = i * 80 + 'ms'
+      $('stage').appendChild(h)
+      setTimeout(() => h.remove(), 1200)
+    }
+  }
+
+  function scheduleBlink() {
+    clearTimeout(blinkTimer)
+    blinkTimer = setTimeout(() => {
+      if (!config.sprite && (mood === 'idle' || mood === 'working') && !walking && !drag) {
+        blink = true; draw()
+        setTimeout(() => { blink = false; draw() }, 130)
+      }
+      scheduleBlink()
+    }, 2200 + Math.random() * 3200)
+  }
+
+  // ---- 입력: 드래그 / 클릭(쓰다듬기) / 우클릭(메뉴) ----
+  document.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || drag) return
+    // AI 아이콘을 누르면 그 앱으로 이동 (펫 드래그보다 먼저)
+    const ai = aiAt(e.clientX, e.clientY)
+    if (ai) {
+      e.preventDefault()
+      onAiClick(ai)
+      return
+    }
+    hideCard(true)
+    if (napped && blanketHit(e.clientX, e.clientY) && !e.target.closest('#sprite, #pet')) { e.preventDefault(); wake(); return }
+    const target = e.target.closest('#sprite, #pet')
+    if (!target) return
+    if (target.id === 'sprite' && !spriteHit(e.clientX, e.clientY) && !(napped && blanketHit(e.clientX, e.clientY))) return
+    e.preventDefault()
+    if (napped) { wake(); return }
+    clearTimeout(patTimer)
+    // Capture keeps receiving the release even when a fast drag leaves the pet window.
+    target.setPointerCapture(e.pointerId)
+    if (typeof endPlay === 'function' && play) endPlay()
+    drag = { target, id: e.pointerId, x: e.screenX, y: e.screenY, moved: 0 }
+    reaction = null
+    const rect = target.getBoundingClientRect()
+    target.style.transformOrigin = `${e.clientX - rect.left}px ${e.clientY - rect.top}px`
+    document.body.classList.add('dragging')
+    window.pet.startDrag()
+    if (config.sprite) restartSprite()
+  })
+  document.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return
+    const dx = e.screenX - drag.x, dy = e.screenY - drag.y
+    drag.moved += Math.abs(dx) + Math.abs(dy)
+    drag.x = e.screenX; drag.y = e.screenY
+    window.pet.dragMove()
+    // A small hanging sway pivots around the point being held.
+    if (drag.target.id === 'sprite') drag.target.style.transform = `translateX(-50%) rotate(${Math.max(-10, Math.min(10, -dx * 0.35))}deg)`
+  })
+  function releasePet(e, cancelled = false) {
+    if (!drag || (e.pointerId !== undefined && e.pointerId !== drag.id)) return
+    const held = drag
+    drag = null
+    window.pet.endDrag()
+    if (held.target.hasPointerCapture(held.id)) held.target.releasePointerCapture(held.id)
+    held.target.style.transformOrigin = ''
+    held.target.style.transform = ''
+    document.body.classList.remove('dragging')
+    react(!cancelled && held.moved > 4 ? 'done' : null)
+    look()
+    if (!cancelled && held.moved <= 4) onPetClick()
+  }
+  document.addEventListener('pointerup', e => releasePet(e))
+  document.addEventListener('pointercancel', e => releasePet(e, true))
+  document.addEventListener('lostpointercapture', e => releasePet(e, true))
+  window.addEventListener('blur', () => releasePet({}, true))
+  document.addEventListener('contextmenu', e => {
+    e.preventDefault()
+    window.pet.showMenu()
+  })
+
+
+  // ---- AI 아이콘 (Claude · GPT) ----
+  // 메인 프로세스가 AI별 상태(status.providers)와 아이콘(config.llmIcons)을 보내 준다.
+  //   provider = { id, label, state: working|waiting|error|done, since, jobStart, detail, source, sources, surfaces: ['app'|'cli'] }
+  // 위치·크기·투명도는 매 프레임 목표값을 향해 부드럽게 따라가게 해서, 상태가 바뀌어도 아이콘이 순간이동하지 않는다.
+  const AI_IDS = ['claude', 'gpt']
+  const AI_FALLBACK = { claude: 'C', gpt: 'G' }
+  const PROVIDER_SOURCES = ['Claude 앱', 'Claude Code', 'ChatGPT 앱', 'Codex 앱', 'Codex']
+  const STATE_LABEL = { working: '작업 중', waiting: '확인 대기', error: '오류', done: '완료' }
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  let providers = []
+  let aiFrame = null
+  let aiLastTime = 0
+  let orbitPhase = 0
+  let aiIconKey = ''
+  let hoverAi = null
+  const aiFx = {}
+  for (const id of AI_IDS) aiFx[id] = { x: 90, y: 150, s: 0.4, o: 0, state: null, stateAt: 0, appearAt: 0, doneFinished: false }
+
+  const providerById = id => providers.find(p => p.id === id)
+  const iconUrl = id => (config.llmIcons && config.llmIcons[id] && config.llmIcons[id].url) || ''
+  const iconDark = id => !!(config.llmIcons && config.llmIcons[id] && config.llmIcons[id].dark)
+  function iconHtml(id, cls) {
+    const url = iconUrl(id)
+    const classes = [cls, id, url ? '' : 'fallback', iconDark(id) ? 'dark' : ''].filter(Boolean).join(' ')
+    return `<div class="${classes}">${url ? `<img src="${url}" alt="">` : AI_FALLBACK[id]}</div>`
+  }
+  function syncAiIcons() {
+    const key = AI_IDS.map(id => iconUrl(id).length + ':' + iconUrl(id).slice(-24) + ':' + iconDark(id)).join('|')
+    if (key === aiIconKey) return
+    aiIconKey = key
+    for (const id of AI_IDS) {
+      const el = $('ai-' + id)
+      el.classList.toggle('fallback', !iconUrl(id))
+      el.classList.toggle('dark', iconDark(id)) // 흰 로고는 어두운 원 위에
+      el.classList.add(id)
+      el.querySelector('.face').innerHTML = iconUrl(id) ? `<img src="${iconUrl(id)}" alt="">` : AI_FALLBACK[id]
+    }
+  }
+
+  const easeOut = k => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3)
+  function aiStep(time) {
+    const dt = Math.min(64, aiLastTime ? time - aiLastTime : 16)
+    aiLastTime = time
+    const height = config.petHeight || 90
+    const bottom = visiblePet.bottom || 186
+    const cx = 90
+    const cy = bottom - height * 0.45
+    const rx = Math.min(72, height * 0.62 + 6)
+    const ry = height * 0.16 + 4
+    const headY = bottom - height + 6
+    const reduce = reducedMotion.matches
+    const shown = config.orbit !== false
+    const orbiters = AI_IDS.filter(id => shown && !reduce && providerById(id)?.state === 'working')
+    // 3.2초에 한 바퀴. 아이콘에 마우스를 올리면 궤도 시계를 멈춰서, 떼면 멈춘 자리에서 그대로 이어 돈다.
+    if (!hoverAi) orbitPhase += (dt / 1000) * Math.PI * 2 / 3.2
+    const base = orbitPhase
+    let busy = false
+    for (const id of AI_IDS) {
+      const fx = aiFx[id]
+      const el = $('ai-' + id)
+      const state = shown ? providerById(id)?.state || null : null
+      if (state !== fx.state) {
+        fx.state = state
+        fx.stateAt = time
+        if (state !== 'done') fx.doneFinished = false
+      }
+      let tx = fx.x, ty = fx.y, ts = 1, to = 1, z = 2, dim = false
+      const slotX = cx + (id === 'claude' ? -1 : 1) * Math.min(50, height * 0.45) // 멈춰 있을 때 자리: Claude 왼쪽, GPT 오른쪽
+      if (state === 'working' && !reduce) {
+        // 처음 나타날 때는 캐릭터 가운데에서 나선을 그리며 궤도로 퍼져 나간다.
+        const spread = easeOut((time - fx.appearAt) / 600)
+        const index = orbiters.indexOf(id)
+        const angle = base + (index * Math.PI * 2) / Math.max(1, orbiters.length)
+        const depth = Math.sin(angle) // 1: 앞, -1: 뒤
+        tx = cx + Math.cos(angle) * rx * spread
+        ty = cy + depth * ry * spread
+        ts = 0.82 + 0.18 * (depth + 1) / 2
+        z = depth >= 0 ? 2 : 0
+        dim = depth < 0
+      } else if (state === 'waiting' || state === 'error' || state === 'working') {
+        tx = slotX
+        ty = headY + (state === 'waiting' && !reduce && hoverAi !== id ? Math.sin(time / 320) * 1.6 : 0)
+        if (state === 'error' && !reduce && time - fx.stateAt < 420) tx += Math.sin((time - fx.stateAt) / 28) * 2.5 // 들어올 때 한 번 흔들기
+      } else if (state === 'done' && !fx.doneFinished) {
+        // 초록 링으로 한 번 커졌다가 위로 떠오르며 사라진다.
+        const k = (time - fx.stateAt) / 1400
+        ty = fx.y - dt * 0.012
+        ts = k < 0.25 ? 1 + (k / 0.25) * 0.3 : 1.3 - (k - 0.25) * 0.5
+        to = k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5)
+        if (k >= 1) fx.doneFinished = true
+      } else {
+        to = 0
+        ts = 0.6
+      }
+      // 마우스를 올린 아이콘: 1.35배로 커지고 맨 앞으로 (누르기 쉽게)
+      const hovered = hoverAi === id && to > 0 && state !== 'done'
+      if (hovered) {
+        ts = 1.35
+        z = 3
+        dim = false
+      }
+      // 숨어 있다가 나타날 때는 캐릭터 가운데에서 시작한다.
+      if (to > 0 && fx.o < 0.02) {
+        fx.x = cx; fx.y = cy; fx.s = 0.4
+        fx.appearAt = time
+      }
+      const follow = 1 - Math.exp(-dt / (state === 'working' && !reduce ? 60 : 110))
+      const fade = 1 - Math.exp(-dt / 120)
+      fx.x += (tx - fx.x) * follow
+      fx.y += (ty - fx.y) * follow
+      fx.s += (ts - fx.s) * (state === 'done' ? 1 : hovered || fx.s > 1.02 ? 1 - Math.exp(-dt / 60) : follow)
+      fx.o = state === 'done' ? to : fx.o + (to - fx.o) * fade
+      if (fx.o < 0.01 && to === 0) fx.o = 0
+      el.dataset.state = state || ''
+      el.style.transform = `translate(${fx.x.toFixed(1)}px, ${fx.y.toFixed(1)}px) scale(${fx.s.toFixed(3)})`
+      el.style.opacity = fx.o.toFixed(3)
+      el.style.zIndex = z
+      el.style.filter = dim ? 'brightness(.88)' : ''
+      el.classList.toggle('hover', hoverAi === id)
+      if (to > 0 || fx.o > 0) busy = true
+    }
+    // 커서가 가만히 있어도 아이콘이 커서 밑으로 지나가면 잡히도록, 도는 동안 매 프레임 마우스 판정을 다시 한다.
+    if (busy && Number.isFinite(cursor.localX) && Number.isFinite(cursor.localY) && !drag) updateInteractive()
+    aiFrame = busy ? requestAnimationFrame(aiStep) : null
+    if (!aiFrame) aiLastTime = 0
+  }
+  function updateAi() {
+    syncAiIcons()
+    if (!aiFrame) aiFrame = requestAnimationFrame(aiStep)
+    renderCard()
+  }
+  // 창 좌표가 보이는 아이콘 위인지 (앞에 있는 아이콘 먼저)
+  function aiAt(x, y) {
+    const order = [...AI_IDS].sort((a, b) => Number($('ai-' + b).style.zIndex || 0) - Number($('ai-' + a).style.zIndex || 0))
+    // 판정 원은 아이콘(지름 22px)보다 조금 넉넉하게
+    return order.find(id => aiFx[id].o > 0.5 && Math.hypot(x - aiFx[id].x, y - aiFx[id].y) <= 16 * Math.max(1, aiFx[id].s)) || null
+  }
+  function onAiClick(id) {
+    const p = providerById(id)
+    if (!p) return
+    hideCard(true)
+    if (p.surfaces.includes('app')) {
+      window.pet.focusProvider(id).then(ok => { if (!ok) sayAi('하아?', '앱을 못 찾았어…') })
+    } else {
+      sayAi('우냐!', `${p.source || p.label}는 터미널에서 일하는 중!\n터미널을 봐 줘`)
+    }
+  }
+
+  // ---- 상태 카드 (펫이나 아이콘에 마우스를 올리면) ----
+  let cardTimer = null
+  let cardHideTimer = null
+  let cardTick = null
+  const escapeHtml = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+  function clock(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000))
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60
+    return h ? `${h}시간 ${m}분` : `${m}:${String(sec).padStart(2, '0')}`
+  }
+  function renderCard() {
+    const card = $('card')
+    const list = providers.filter(p => p.state !== 'done')
+    if (!list.length) { hideCard(true); return }
+    if (!card.classList.contains('show')) return
+    const now = Date.now()
+    // 첫 줄: 아이콘 · 어디서(Claude 앱, Codex …) · 이번 작업 경과 시간 / 둘째 줄: 상태 · 자세한 내용
+    card.innerHTML = list.map(p => {
+      const time = p.state === 'working' || p.state === 'waiting' ? clock(now - (p.jobStart || p.since)) : ''
+      // 작업 중엔 지금 쓰는 도구를 짧게, 확인 대기·오류엔 무엇을 봐야 하는지 아래 줄에 줄바꿈해서 끝까지 (최대 3줄)
+      const short = p.detail && p.state === 'working' ? `<span>· ${escapeHtml(prettyDetail(p.detail))}</span>` : ''
+      const long = p.detail && p.state !== 'working' ? `<div class="detail">${escapeHtml(prettyDetail(p.detail))}</div>` : ''
+      return `<div class="row">${iconHtml(p.id, 'ico')}<span class="name">${escapeHtml(p.source || p.label)}</span><span class="time">${time}</span></div>` +
+        `<div class="sub"><div class="state ${p.state}"><b><i class="dot"></i>${STATE_LABEL[p.state]}</b>${short}</div></div>${long}`
+    }).join('') + (list.some(p => p.surfaces.includes('app')) ? '<div class="hint">아이콘을 누르면 앱으로 이동</div>' : '')
+    placeCard()
+  }
+  // 카드는 펫 위에 둔다. 공간이 모자라면 자세한 내용 줄 수를 3 → 2 → 1로 줄여서 맞추고,
+  // 펫이 화면 위쪽 끝에 붙어 있을 때만 아래에 둔다 (펫 아래는 보통 작업 표시줄이라).
+  function placeCard() {
+    const card = $('card')
+    const space = visiblePet.top - 14
+    let h = 0
+    for (const lines of [3, 2, 1]) {
+      card.style.setProperty('--detail-lines', lines)
+      h = card.offsetHeight
+      if (h <= space) break
+    }
+    const below = roomAbove < h + 16
+    card.style.top = (below ? visiblePet.bottom + 10 : Math.max(2, visiblePet.top - h - 12)) + 'px'
+  }
+  function showCard() {
+    if (!providers.some(p => p.state !== 'done')) return
+    clearTimeout(cardHideTimer)
+    $('bubble').classList.remove('show')
+    $('card').classList.add('show')
+    renderCard()
+    clearInterval(cardTick)
+    cardTick = setInterval(renderCard, 1000) // 경과 시간 갱신
+  }
+  function hideCard(now = false) {
+    clearTimeout(cardTimer)
+    cardTimer = null
+    const hide = () => { $('card').classList.remove('show'); clearInterval(cardTick) }
+    if (now) hide()
+    else { clearTimeout(cardHideTimer); cardHideTimer = setTimeout(hide, 160) }
+  }
+  // 커서가 펫·아이콘 위에 머물면 0.35초 뒤에 카드를 띄운다.
+  function updateHover(overPet) {
+    const x = cursor.localX, y = cursor.localY
+    const ai = Number.isFinite(x) && Number.isFinite(y) && !drag ? aiAt(x, y) : null
+    if (ai !== hoverAi) {
+      hoverAi = ai
+      document.body.style.cursor = ai ? 'pointer' : ''
+      if (!aiFrame) aiFrame = requestAnimationFrame(aiStep)
+    }
+    const over = !drag && (ai || overPet)
+    if (over && !$('card').classList.contains('show') && !cardTimer) cardTimer = setTimeout(() => { cardTimer = null; showCard() }, 350)
+    if (!over && ($('card').classList.contains('show') || cardTimer)) hideCard()
+  }
+
+  // 상태 점: AI 링이 이미 같은 정보를 보여 주면 겹쳐서 띄우지 않는다 (외부 status.json 상태일 때만 표시).
+  let badgeSources = []
+  function badgeCovered() {
+    return config.orbit !== false && badgeSources.length > 0 && badgeSources.every(source => PROVIDER_SOURCES.includes(source))
+  }
+  function renderBadge() {
+    $('badge').className = badgeMood === 'idle' || badgeCovered() ? '' : badgeMood
+  }
+
+
+  // ---- 우사기 상호작용 ----
+  // 원작 속 우사기 모습에서 가져온 행동들. 설정 창 '상호작용'에서 하나씩 켜고 끈다 (config.play.<id>, 전체는 config.playAll).
+  //   pat   쓰다듬기       클릭하면 손을 모으고 좋아한다
+  //   poke  하아?!         2.5초 안에 세 번 찌르면 빨개져서 화낸다 ("하아?" = 뭐야 / 짜증)
+  //   snack 간식 먹기      먹보 우사기. 간식이 떨어지면 세 입에 먹고 "우마!" (맛있다)
+  //   dance 갑자기 춤추기   흥이 나면 갑자기 춤춘다 (주먹질할 때 "우 우나나 우나~", 몸 흔들 때 "우나나 야하야하~~", 다리 꼴 때 "쁘릿!")
+  //   acorn 도토리 닦기     도토리를 반짝반짝 닦는다
+  //   flee  도망가기        근처에서 마우스를 마구 흔들면 "우라!" 하고 잰걸음으로 달아난다 (메인 프로세스가 감지·이동)
+  //   nap   도라야키 낮잠   3분 동안 컴퓨터를 안 쓰면 커다란 도라야키를 이불 삼아 잔다
+  //   greet 돌아오면 반기기  2분 넘게 자리를 비웠다 돌아오면 "야하!"
+  const playOn = id => config.playAll !== false && !(config.play && config.play[id] === false)
+  const PLAY_LINES = {
+    snack: [['우마!', '맛있다!'], ['우마우마~', '정말 맛있어!'], ['우~라~!', '엄청 맛있잖아!']],
+    danceFist: [['우 우나나 우나~', '주먹 콩콩! 신나게 춤추는 중']],
+    danceSway: [['우나나 야하야하~~', '흔들흔들~ 신난다!']],
+    danceCross: [['쁘릿!', '다리 꼬고 멋지게 마무리!']],
+    acorn: [['푸루루~', '도토리 반짝반짝 닦는 중'], ['후응…', '음, 좀 더 반짝이게']],
+    acornDone: [['야하!', '반짝반짝해졌다!']],
+    poke: [['하아?!', '그만 찔러!'], ['하아아?!', '뭐야, 짜증 나!']],
+    flee: [['우라!', '으악, 도망가자!'], ['하아?! 우라!', '뭐야?! 튀자!']],
+    napStart: [['푸루루…', '졸려… 도라야키 이불 덮고 잘래']],
+    wake: [['야하~!', '잘 잤다! 다시 왔구나']],
+    greet: [['야하!', '다시 왔구나! 반가워'], ['야하~!', '어서 와!']],
+  }
+  const SNACKS = [['🍮', '푸딩'], ['🍙', '주먹밥'], ['🍜', '라멘'], ['🍡', '경단'], ['🥞', '팬케이크'], ['🍩', '도넛']]
+  let play = null // 지금 하고 있는 행동 이름 (한 번에 하나만)
+  let playTimers = []
+  let pokes = []
+  let idleSeconds = 0
+  let awayFrom = 0 // 자리를 비우기 시작했을 때의 쉬는 시간(초)
+
+  function sayPlay(key, extra = '', ms) {
+    const [word, meaning] = pick(PLAY_LINES[key])
+    say(word, showBasicMeaning() ? (extra ? `${meaning} ${extra}` : meaning) : '', ms)
+  }
+  function later(ms, fn) { const t = setTimeout(fn, ms); playTimers.push(t); return t }
+  function fxEl(cls, text, x, y) {
+    const el = document.createElement('div')
+    el.className = `fx ${cls}`
+    if (text) el.textContent = text
+    el.style.left = x + 'px'
+    el.style.top = y + 'px'
+    $('stage').appendChild(el)
+    return el
+  }
+  const petBox = () => {
+    const half = Math.max(24, visiblePet.right - 90)
+    return { cx: 90, top: visiblePet.top, bottom: visiblePet.bottom, half, height: visiblePet.bottom - visiblePet.top }
+  }
+  function endPlay() {
+    for (const t of playTimers) clearTimeout(t)
+    playTimers = []
+    for (const el of document.querySelectorAll('.fx:not(.blanket):not(.zzz)')) el.remove()
+    $('sprite').classList.remove('dancing', 'huff')
+    play = null
+    reportPlaying()
+  }
+  // 우사기가 지금 다른 일(드래그·걷기·AI 상태·낮잠)을 안 할 때만 혼자 하는 행동을 시작한다.
+  const calm = () => mood === 'idle' || mood === 'done' // 완료는 몇 분 유지되지만 우사기는 쉬는 모습이다
+  const free = () => !drag && !play && !walking && !napped && calm()
+  // 상호작용을 시작·끝낼 때 메인 프로세스에 알려서 그동안 혼자 걷지 않게 한다.
+  let playReported = false
+  function reportPlaying() {
+    const busy = !!play && play !== 'flee'
+    if (busy === playReported) return
+    playReported = busy
+    window.pet.setPlaying(busy)
+  }
+
+  // 상호작용 전용 그림 (시트 16~21번째 줄). 없으면 기존 동작 + 효과로 대신한다.
+  const anim = name => config.sprite && config.sprite.animations[name]
+  const animMs = name => { const a = anim(name); return a ? Math.ceil(a.frames.length / (a.fps || 6) * 1000) : 0 }
+  // 한 번 재생하면 끝나는 동작을 정해진 시간 동안 이어서 재생한다. 끝나는 시각을 돌려준다.
+  function loopReact(name, startAt, totalMs) {
+    const one = animMs(name)
+    const times = Math.max(1, Math.round(totalMs / one))
+    for (let i = 0; i < times; i++) later(startAt + i * one, () => react(name))
+    return startAt + times * one
+  }
+
+  function doSnack() {
+    endPlay(); play = 'snack'
+    const [emoji, name] = pick(SNACKS)
+    const box = petBox()
+    const food = fxEl('food', emoji, box.cx, Math.max(0, box.top - 70))
+    requestAnimationFrame(() => requestAnimationFrame(() => { food.style.top = (box.bottom - box.height * 0.42) + 'px' }))
+    const crumbs = () => {
+      for (let k = 0; k < 3; k++) {
+        const c = fxEl('crumb', '', box.cx + (Math.random() * 16 - 8), box.bottom - box.height * 0.36)
+        c.style.setProperty('--dx', `${Math.random() * 24 - 12}px`)
+        setTimeout(() => c.remove(), 700)
+      }
+    }
+    if (anim('eat')) {
+      // 먹기 그림이 간식을 들고 있으니, 떨어진 간식은 손에 닿는 순간 사라진다.
+      later(520, () => { food.style.opacity = '0' })
+      const end = loopReact('eat', 520, 2600)
+      for (let t = 1200; t < end; t += 700) later(t, crumbs)
+      later(end, () => { food.remove(); sayPlay('snack', `· ${name}`) })
+      later(end + 800, endPlay)
+      return
+    }
+    later(520, () => react('review'))
+    for (const [i, at] of [[0, 900], [1, 1500], [2, 2100]]) {
+      later(at, () => {
+        food.style.transform = `translate(-50%, 0) scale(${[0.7, 0.45, 0.15][i]})`
+        crumbs()
+        if (i === 1) react('review')
+      })
+    }
+    later(2400, () => { food.remove(); react('done'); sayPlay('snack', `· ${name}`) })
+    later(3400, endPlay)
+  }
+
+  function doDance() {
+    endPlay(); play = 'dance'
+    const box = petBox()
+    let end = 3300
+    const art = anim('dance')
+    if (art) {
+      end = loopReact('dance', 0, 3200) + 100 // 춤 그림이 있으면 몸 흔들기 효과는 쓰지 않는다
+      // 시트 설정에서 프레임마다 정한 대사(say)를 그 프레임이 나오는 때에 말한다 (주먹질 → 몸 흔들기 → 다리 꼬기).
+      const cues = art.frames.map((f, i) => [i, f.say]).filter(([, key]) => PLAY_LINES[key])
+      const one = animMs('dance')
+      for (let t = 0; t < end - 100; t += one) {
+        // 말풍선은 다음 대사까지 띄워 둔다. 마지막 대사는 춤이 끝난 뒤에도 읽을 수 있게 최소 1.8초.
+        const at = i => t + Math.round(i / (art.fps || 6) * 1000)
+        if (cues.length) cues.forEach(([i, key], k) => later(at(i), () => sayPlay(key, '', k + 1 < cues.length ? at(cues[k + 1][0]) - at(i) + 200 : Math.max(1800, t + one - at(i) + 200))))
+        else later(t, () => sayPlay('danceSway'))
+      }
+    } else {
+      sayPlay('danceSway')
+      $('sprite').classList.add('dancing')
+      react('review')
+      later(1300, () => react('review'))
+      later(2600, () => react('done'))
+    }
+    for (let i = 0; i * 340 < end - 400; i++) {
+      later(i * 340, () => {
+        const n = fxEl('note', pick(['♪', '♫', '♪']), box.cx + (i % 2 ? box.half * 0.8 : -box.half * 0.9), box.top + box.height * 0.25)
+        n.style.setProperty('--dx', `${i % 2 ? 10 : -10}px`)
+        setTimeout(() => n.remove(), 1500)
+      })
+    }
+    later(end, endPlay)
+  }
+
+  function doAcorn() {
+    endPlay(); play = 'acorn'
+    const box = petBox()
+    sayPlay('acorn')
+    const drawn = !!anim('acorn') // 도토리 닦기 그림에는 도토리가 그려져 있다
+    const acorn = drawn ? null : fxEl('acorn', '🌰', box.cx, box.bottom - box.height * 0.5)
+    let end = 2900
+    if (drawn) end = loopReact('acorn', 0, 2800)
+    else for (let i = 0; i < 3; i++) later(i * 900, () => react('review'))
+    for (let i = 0; 300 + i * 400 < end; i++) {
+      later(300 + i * 400, () => {
+        const sp = fxEl('spark', '✦', box.cx + (Math.random() * 30 - 15), box.bottom - box.height * (0.5 + Math.random() * 0.25))
+        setTimeout(() => sp.remove(), 800)
+      })
+    }
+    later(end, () => { if (acorn) acorn.style.transform = 'translate(-50%, -26px) scale(1.25)'; sayPlay('acornDone') })
+    if (acorn) later(end + 500, () => { acorn.style.opacity = '0' })
+    later(end + 900, endPlay)
+  }
+
+  // 반기기 점프 (반기기 그림이 있으면 손 흔들기)
+  const greetReact = () => react(anim('greet') ? 'greet' : 'done')
+
+  function doPoke() {
+    endPlay(); play = 'poke'
+    clearTimeout(patTimer)
+    const box = petBox()
+    fxEl('anger', '💢', box.cx + box.half * 0.75, box.top + 6)
+    sayPlay('poke')
+    // 시트에 싸움 동작(28프레임: 주먹 연타 → 돌아서 버둥 돌진)이 있으면 그걸, 없으면 빨개지기
+    if (config.sprite && config.sprite.animations.fight) {
+      react('fight')
+      const a = config.sprite.animations.fight
+      later(Math.ceil(a.frames.length / (a.fps || 10) * 1000) + 100, endPlay)
+    } else {
+      react('error')
+      $('sprite').classList.add('huff')
+      later(1200, endPlay)
+    }
+  }
+
+  function doFlee() {
+    // 이동은 메인 프로세스가 한다. 여기서는 놀란 말풍선만.
+    if (napped) wake(false)
+    endPlay()
+    sayPlay('flee')
+  }
+
+  function startNap() {
+    if (napped || !config.sprite) return
+    endPlay()
+    napped = true
+    window.pet.setNapping(true)
+    const box = petBox()
+    sayPlay('napStart')
+    react(null) // 낮잠 그림이 있으면 여기서 그 그림이 돌기 시작한다 (spriteAnim)
+    const z0 = Math.round(box.height * 1.25)
+    if (anim('nap')) {
+      const z = fxEl('zzz', 'Z', box.cx + z0 * 0.38, box.bottom - z0 * 0.62)
+      const z2 = fxEl('zzz', 'z', box.cx + z0 * 0.30, box.bottom - z0 * 0.56)
+      z2.style.animationDelay = '1.2s'
+      return
+    }
+    clearInterval(spriteTimer) // 첫 그림에서 멈춘 채 눕는다
+    const c = $('sprite')
+    // 축 = 몸 가운데. 눕고 나면 몸 높이는 몸 폭(키의 약 0.65배)이 되므로, 바닥에 닿도록 키의 0.17배만큼 내린다.
+    c.style.transformOrigin = `50% ${Math.round(c.clientHeight - 6 - box.height / 2)}px`
+    c.style.setProperty('--nap-dy', `${Math.round(box.height * 0.17)}px`)
+    c.classList.remove('waking')
+    c.classList.add('napping')
+    const w = Math.round(box.height * 1.25)
+    const blanket = fxEl('blanket breathe', '', box.cx, box.bottom - Math.round(w * 0.42) - 2)
+    blanket.style.zIndex = 2
+    blanket.innerHTML = `<svg width="${w}" height="${Math.round(w * 0.42)}" viewBox="0 0 120 50" aria-hidden="true">
+      <ellipse cx="60" cy="30" rx="56" ry="17" fill="#B9733A"/>
+      <ellipse cx="60" cy="27" rx="56" ry="15" fill="#E8A65A"/>
+      <ellipse cx="60" cy="25" rx="50" ry="11" fill="#C8803F"/>
+      <path d="M8 31 Q60 40 112 31" fill="none" stroke="#7A4A22" stroke-width="2.4" stroke-linecap="round"/>
+      <ellipse cx="44" cy="21" rx="12" ry="3" fill="#F3C27C" opacity=".7"/></svg>`
+    blanket.style.lineHeight = '0'
+    const z = fxEl('zzz', 'Z', box.cx + w * 0.38, box.bottom - w * 0.62)
+    const z2 = fxEl('zzz', 'z', box.cx + w * 0.30, box.bottom - w * 0.56)
+    z2.style.animationDelay = '1.2s'
+  }
+  function wake(greet = true) {
+    if (!napped) return
+    napped = false
+    window.pet.setNapping(false)
+    for (const el of document.querySelectorAll('.zzz')) el.remove()
+    for (const el of document.querySelectorAll('.blanket')) { el.classList.add('off'); setTimeout(() => el.remove(), 550) }
+    $('sprite').classList.add('waking')
+    $('sprite').classList.remove('napping')
+    setTimeout(() => { $('sprite').classList.remove('waking'); if (!napped) $('sprite').style.transformOrigin = '' }, 500)
+    if (config.sprite) restartSprite()
+    if (greet) { later(350, greetReact); sayPlay('wake') }
+  }
+
+  function doPlay(id) {
+    if (drag) return
+    if (napped && id !== 'nap') wake(false)
+    if (id === 'snack') doSnack()
+    else if (id === 'dance') doDance()
+    else if (id === 'acorn') doAcorn()
+    else if (id === 'poke') doPoke()
+    else if (id === 'flee') doFlee()
+    else if (id === 'nap') { if (napped) wake(); else startNap() }
+    else if (id === 'greet') { endPlay(); greetReact(); sayPlay('greet') }
+    else if (id === 'pat') { endPlay(); react('review'); sayBasic('pat') }
+    reportPlaying()
+  }
+
+  // 클릭: 쓰다듬기, 짧은 시간에 세 번이면 화내기
+  function onPetClick() {
+    if (napped) { wake(); return }
+    const now = Date.now()
+    pokes = pokes.filter(t => now - t < 2500)
+    pokes.push(now)
+    if (playOn('poke') && pokes.length >= 3) { pokes = []; doPoke(); reportPlaying(); return }
+    if (!playOn('pat')) return
+    patTimer = setTimeout(() => { if (play === 'poke') return; react('review'); sayBasic('pat') }, 260)
+  }
+
+  // 컴퓨터를 안 쓴 시간: 3분이면 낮잠, 2분 넘게 비웠다 돌아오면 반기기
+  function onUserIdle(seconds) {
+    const before = idleSeconds
+    idleSeconds = seconds
+    if (seconds >= 120 && !awayFrom) awayFrom = seconds
+    if (seconds >= 180 && playOn('nap') && free()) startNap()
+    if (seconds < before && seconds < 3) {
+      // 방금 돌아왔다
+      const wasAway = awayFrom >= 120
+      awayFrom = 0
+      if (napped) wake()
+      else if (wasAway && playOn('greet') && !drag && !play && calm()) doPlay('greet')
+    }
+  }
+
+  // 혼자 하는 행동: 45초마다 쉬고 있으면 약 12% 확률 (평균 6분에 한 번)
+  setInterval(() => {
+    if (!free() || $('bubble').classList.contains('show') || Math.random() > 0.12) return
+    const choices = ['dance', 'acorn', 'snack'].filter(playOn)
+    if (choices.length) doPlay(pick(choices))
+  }, 45000)
+
+  // ---- 메인 프로세스에서 오는 신호 ----
+  window.pet.onConfig(c => {
+    const wasTalking = config.chatter
+    config = c
+    if (wasTalking && !config.chatter) {
+      clearTimeout(bubbleTimer)
+      $('bubble').classList.remove('show')
+    }
+    draw()
+    updateAi()
+    renderBadge()
+  })
+  window.pet.onViewport(v => { roomAbove = v.roomAbove; placeBubble() })
+  window.pet.onWalk(dir => {
+    if (napped && dir) return
+    if (dir && play && play !== 'poke' && play !== 'flee') endPlay()
+    walking = dir
+    draw()
+  })
+  window.pet.onPlay(id => doPlay(id))
+  window.pet.onIdle(seconds => onUserIdle(seconds))
+  window.pet.onCursor(c => {
+    cursor = c
+    if (config.chatter && c.near && !wasNear && calm() && !napped && !play && Math.random() < 0.5) sayBasic('near')
+    wasNear = c.near
+    look()
+    updateInteractive()
+  })
+  let lastDoneAt = 0
+  window.pet.onStatus(status => {
+    providers = Array.isArray(status.providers) ? status.providers : []
+    badgeSources = Array.isArray(status.sources) ? status.sources : []
+    updateAi()
+    renderBadge()
+    const prev = mood
+    mood = status.mood
+    // 완료는 연달아 와도(여러 세션) 새 완료마다 점프한다.
+    const freshDone = mood === 'done' && status.at !== lastDoneAt
+    if (mood === 'done') lastDoneAt = status.at
+    const changed = mood !== prev || freshDone
+    if (changed) setBadge(mood)
+    if (changed && mood !== 'idle') { if (napped) wake(false); if (play && play !== 'poke') endPlay() }
+    if (changed && !drag) {
+      react(mood === 'done' ? 'done' : null)
+      if (!config.sprite) draw()
+    }
+    if (config.chatter && changed && mood !== 'idle') sayMood(mood, status.detail)
+  })
+
+  // 가끔 혼잣말
+  function repaintForDisplay() {
+    lastPaint = ''
+    if (config.sprite) paintFrame()
+  }
+  function watchDisplayResolution() {
+    window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+      .addEventListener('change', () => { repaintForDisplay(); watchDisplayResolution() }, { once: true })
+  }
+  watchDisplayResolution()
+  window.addEventListener('resize', repaintForDisplay)
+
+  setInterval(() => {
+    if (config.chatter && calm() && !walking && !drag && !napped && !play && Math.random() < 0.35) sayBasic('idle')
+  }, 25000)
+
+  window.pet.getConfig().then(c => {
+    config = c
+    draw()
+    updateAi()
+    scheduleBlink()
+    if (config.chatter) sayBasic('greeting')
+  })
+</script>
+</body>
+</html>
