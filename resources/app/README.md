@@ -60,11 +60,24 @@ New-Item -ItemType Junction -Path pets -Target ..\..\pets
 node hooks/install.js
 ```
 
-`package.json`의 `npm run hooks`는 `resources/app/hooks`를 가리키는데 그 폴더는 레포에 없으니, 위처럼 루트에서 실행해야 합니다. 같은 이유로 `npm run package:win`도 `scripts/package-win.js`가 레포에 없어서 동작하지 않습니다.
+`resources/app`에서 `npm run hooks`를 써도 같습니다 (0.4.17부터 루트의 `hooks/install.js`를 가리킵니다). 제거는 `npm run hooks:remove`입니다.
 
 ### Windows 배포본 다시 만들기
 
-Windows x64에서 `npm install` 후 `npm run package:win`을 실행하세요. `release/UsagiPet-0.3.2-win32-x64`에 실행 파일과 필요한 파일이 생성됩니다. 같은 이름의 출력 폴더가 이미 있으면 다른 곳으로 옮긴 뒤 다시 실행하세요. 배포할 때는 그 폴더 전체를 ZIP으로 묶으세요. 개인 설정과 개발용 `node_modules`는 배포본에 포함하지 않습니다.
+Windows x64에서 `resources/app`에 들어가 `npm install` 후 `npm run package:win`을 실행하세요. 레포 루트의 `release/UsagiPet-<버전>-win32-x64`에 실행 파일과 필요한 파일이 모두 생깁니다.
+
+```bash
+cd resources/app
+npm install
+npm run package:win
+```
+
+- Electron 런타임을 복사하고 `electron.exe`를 `UsagiPet.exe`로 바꾼 뒤, `resources/app`에 앱 소스를, 그 옆에 `pets` · `hooks` · `README.md` · `패치노트.md` · `시작하기.txt` · `업데이트-방법.txt`를 담습니다.
+- `node_modules`, 시트 백업(`sprite-before-*.png`), 개발용으로 넣어 둔 `resources/app/pets`는 담지 않습니다.
+- 같은 이름의 출력 폴더가 이미 있으면 멈춥니다. 지우고 다시 만들려면 `npm run package:win -- --force`를 쓰세요.
+- 아이콘은 Electron 기본 아이콘을 씁니다. 시작 메뉴 바로 가기와 알림용 앱 ID는 배포본을 처음 실행할 때 앱이 직접 만듭니다.
+
+배포할 때는 그 폴더 전체를 ZIP으로 묶으세요. 개인 설정과 개발용 `node_modules`는 배포본에 포함하지 않습니다.
 
 ## 펫 이미지 바꾸기 — 가장 쉬운 방법
 
@@ -342,6 +355,16 @@ hooks/install.js     hooks 설치·제거
 ## 버전별 변경 내역
 
 사용자용 패치노트는 [패치노트.md](패치노트.md)에 버전마다 정리되어 있습니다. 아래는 설정 파일·기록 형식까지 담은 자세한 변경 기록입니다.
+
+## 0.4.17에서 바뀐 점
+
+- `resources/app/scripts/package-win.js`를 새로 넣었습니다. `package.json`의 `package:win`이 이 파일을 가리키고 있었지만 파일이 없어 `npm run package:win`이 실패했습니다. 이제 Electron 런타임(`node_modules/electron/dist`)을 복사하고 `electron.exe`를 `UsagiPet.exe`로 바꾼 뒤, `resources/app`에 앱 소스를, 앱 폴더에 `pets` · `hooks` · 설명 파일들을 담아 `<루트>/release/UsagiPet-<버전>-win32-x64`를 만듭니다.
+  - `default_app.asar`, `node_modules`, 시트 백업(`sprite-before-*.png`), 개발용 `resources/app/pets`는 담지 않습니다.
+  - 출력 폴더가 이미 있으면 멈추고, `npm run package:win -- --force`로 지우고 다시 만듭니다.
+  - 아이콘은 Electron 기본 아이콘입니다(rcedit 없이 바꿀 수 없음). 시작 메뉴 바로 가기와 앱 ID는 앱이 처음 실행될 때 `ensureAppIdentity`가 만듭니다.
+- `package.json`의 `hooks` · `hooks:remove`가 `hooks/install.js`를 가리켜 `resources/app`에서 실행하면 파일을 찾지 못했습니다. `../../hooks/install.js`로 바꿨습니다. 설치본과 레포 모두 `hooks`는 앱 폴더(루트)에 있어 배포본에서도 같은 경로로 동작합니다.
+- `.gitignore`에 `/release/`를 넣어 배포본 출력은 깃에 올라가지 않습니다.
+- 펫 동작 · 설정 키 · 파일 형식은 바뀌지 않았습니다.
 
 ## 0.4.16에서 바뀐 점
 

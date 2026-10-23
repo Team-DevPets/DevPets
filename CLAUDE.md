@@ -21,10 +21,11 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
   pets\sprite-before-*.png       시트를 바꿀 때마다 남긴 백업 (fight · dance · legs)
   pets\sprite.json               (없음) 시트 줄 배정을 덮어쓰고 싶을 때만
   logs\app-watch.log             감지·상태·오류 기록 — 문제를 볼 때 가장 먼저 확인
+  hooks\                         Claude Code·Codex hooks (install.js, pet-status.js) — npm run hooks 로 설치
   dev\sprite-tools\add_rows.py   새 동작 그림을 시트에 붙이는 도구 (Python)
   dev\sprite-sources\            지금 시트의 춤 원본 그림 3장
   resources\app\                 ★ 앱 소스
-    package.json                 버전 (지금 0.4.16), npm test
+    package.json                 버전 (지금 0.4.17), npm test · npm run package:win
     main.js                      메인 프로세스: 창·시트 인식·드래그·산책·상태 감지·알림·트레이·설정 창
     llm-status.js                AI 상태 합치기 규칙 (우선순위: waiting > error > working > done)
     codex-sessions.js            ChatGPT(Codex) 앱 작업 기록 ~/.codex/sessions/**/rollout-*.jsonl 읽기
@@ -34,12 +35,18 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
     renderer\index.html          펫 화면: 그림 그리기·시선·말풍선·상호작용 엔진 (HTML+CSS+JS 한 파일)
     renderer\settings.html/.js   설정 창(컨트롤센터)
     renderer\fonts\              Jua · Noto Sans KR (오프라인용)
-    hooks\                       Claude Code·Codex hooks (pet-status.js, install.js)
+    scripts\package-win.js       Windows 배포본 만들기 (npm run package:win)
     test\                        node --test 자동 테스트 15개
     assets\default-pet.png       내장 기본 우사기 시트
 ```
 
 사용자 설정·상태 파일: `%USERPROFILE%\.claude-desk-pet\` (config.json, status.json, hooks 세션 기록).
+
+## 깃
+
+- 레포: [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) (main 브랜치). 이 폴더가 그대로 레포다.
+- Electron 런타임(`UsagiPet.exe` · dll · locales), `logs\`, `.claude\`, `release\`는 `.gitignore`로 뺀다. GitHub는 파일 한 개를 100MB까지만 받으므로 180MB인 실행 파일은 올릴 수 없다.
+- 클론한 사람은 `resources\app`에서 `npm install` → `npm start`. 시트는 `resources\app\pets`에서 찾으니 루트 `pets`를 복사하거나 junction으로 연결해야 춤·싸움이 나온다.
 
 ## 실행 · 재시작 · 확인 방법
 
@@ -51,7 +58,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 
 ## 버전 올리기 (매번)
 
-1. `resources\app\package.json`의 `version`을 올린다 (0.4.16 → 0.4.17 …).
+1. `resources\app\package.json`의 `version`을 올린다 (0.4.17 → 0.4.18 …).
 2. `패치노트.md` 맨 위(가장 최신 자리)에 `## 0.4.17 — 한 줄 제목` 항목 추가. **사용자용 쉬운 말**로, `**새 기능** / **개선** / **바뀐 점** / **버그 수정**` 중 맞는 것만.
 3. `README.md`의 "버전별 변경 내역" 아래에 `## 0.4.17에서 바뀐 점` 추가 — 설정 키·파일 형식까지 담은 자세한 기록.
 4. 루트와 `resources\app`의 `README.md` · `패치노트.md`를 같은 내용으로 맞춘다.
