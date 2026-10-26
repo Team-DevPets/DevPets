@@ -881,7 +881,14 @@ let napping = false // 도라야키 이불 낮잠 중에는 혼자 걷지 않는
 let playing = false // 간식·춤 같은 상호작용 중에도 걷지 않는다 (걸으면 하던 행동이 끊겨서)
 let dashing = false // 도망가는 중
 
-// 휘저으면 도망가기: 잰걸음(평소의 2배 속도)으로 커서 반대쪽으로 약 190px 달아난다.
+// 걸음 빠르기: 한 걸음 몇 px 씩 몇 ms 마다 옮기는지. 잰걸음은 보통 걸음의 약 3.6배 빠르다.
+const WALK_STEP = 3, WALK_INTERVAL = 40 // 보통 걸음 (초당 75px)
+const DASH_STEP = 6, DASH_INTERVAL = 22 // 잰걸음 (초당 273px) — 도망갈 때와 혼자 산책할 때 같이 쓴다
+// 산책 한 번에 가는 거리. 찔끔 움직이다 마는 일이 없게 최소 거리를 둔다.
+const WALK_MIN_PX = 300, WALK_MAX_PX = 600
+const FAST_WALK_CHANCE = 0.7 // 산책 열 번에 일곱 번은 잰걸음으로
+
+// 휘저으면 도망가기: 잰걸음으로 커서 반대쪽으로 약 190px 달아난다.
 let lastFleeAt = 0
 async function dash(vx, vy = 0) {
   if (!win || win.isDestroyed() || dragAnchor || !win.isVisible()) return
@@ -899,7 +906,7 @@ async function dash(vx, vy = 0) {
   const ux = vx / len, uy = vy / len
   win.webContents.send('pet:walk', walkFacing(ux) * 2)
   dashing = true
-  await moveAlong(ux, uy, 32, 6, 22, generation)
+  await moveAlong(ux, uy, 32, DASH_STEP, DASH_INTERVAL, generation)
   dashing = false
   if (generation === walkGeneration && win && !win.isDestroyed()) win.webContents.send('pet:walk', 0)
   if (generation === walkGeneration) scheduleWalk()
@@ -917,10 +924,14 @@ function scheduleWalk() {
       const [x0, y0] = win.getPosition()
       const [dx, dy] = pickWalkDirection(range, x0, y0)
       const len = Math.hypot(dx, dy)
-      // 한 번에 150~500px (한 걸음 3px, 약 2~7초) 걷는다. 대각선도 같은 빠르기.
-      const steps = 50 + Math.floor(Math.random() * 117)
-      win.webContents.send('pet:walk', walkFacing(dx))
-      await moveAlong(dx / len, dy / len, steps, 3, 40, generation, () => !!config.wander)
+      // 열에 일곱은 도망갈 때와 같은 빠르기로 간다. 그림은 걷기 그림 그대로 두 배 빠르게 그린다
+      // (±3 = 빠른 산책. 도망(±2)과 달리 잰걸음 전용 그림이 있어도 쓰지 않는다 — 산책은 걷는 모습이어야 한다).
+      const fast = Math.random() < FAST_WALK_CHANCE
+      const step = fast ? DASH_STEP : WALK_STEP
+      // 한 번에 300~600px. 거리로 정하고 걸음 수를 뽑아서, 빠르든 느리든 가는 거리는 같다. 대각선도 같다.
+      const steps = Math.ceil((WALK_MIN_PX + Math.random() * (WALK_MAX_PX - WALK_MIN_PX)) / step)
+      win.webContents.send('pet:walk', walkFacing(dx) * (fast ? 3 : 1))
+      await moveAlong(dx / len, dy / len, steps, step, fast ? DASH_INTERVAL : WALK_INTERVAL, generation, () => !!config.wander)
       if (generation === walkGeneration && win && !win.isDestroyed()) win.webContents.send('pet:walk', 0)
     }
     if (generation === walkGeneration) scheduleWalk()

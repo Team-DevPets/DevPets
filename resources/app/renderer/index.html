@@ -415,12 +415,14 @@
   let animName = '' // 지금 그리는 동작 이름 (잰걸음 그림을 왼쪽으로 뒤집을 때 쓴다)
   function spriteAnim() {
     const sp = config.sprite
+    // ±2 도망(잰걸음 전용 그림이 있으면 그걸로) · ±3 빠른 산책(언제나 걷기 그림을 두 배 빠르게)
     const dashing = Math.abs(walking) === 2
+    const quick = Math.abs(walking) === 3
     const name = drag ? 'dragging' : reaction || (napped && sp.animations.nap ? 'nap'
       : walking ? (dashing && sp.animations.dash ? 'dash' : walking < 0 && sp.animations.walkLeft ? 'walkLeft' : 'walk')
       : mood === 'done' ? 'idle' : mood)
     animName = name
-    if (sp.animations[name]) return { ...sp.animations[name], fps: name === 'idle' && config.calmMode ? 2 : dashing && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
+    if (sp.animations[name]) return { ...sp.animations[name], fps: name === 'idle' && config.calmMode ? 2 : (dashing || quick) && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
     if (name === 'walk' && sp.animations.idle) return sp.animations.idle
     // 남는 줄이 있으면 쉬는 중일 때 번갈아 보여준다
     if (name === 'idle' && sp.extras.length) return sp.extras[idleVariant % sp.extras.length]
