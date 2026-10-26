@@ -356,6 +356,21 @@ hooks/install.js     hooks 설치·제거
 
 사용자용 패치노트는 [패치노트.md](패치노트.md)에 버전마다 정리되어 있습니다. 아래는 설정 파일·기록 형식까지 담은 자세한 변경 기록입니다.
 
+## 0.4.18에서 바뀐 점
+
+- **귀 팔랑(`ear`) 동작을 더했습니다.** 보내 주신 그림 두 장(14프레임 · 7프레임)을 펫 시트 23~25번째 줄(0부터 세면 22 · 23 · 24)에 붙이고, 21프레임짜리 **한 동작**으로 이었습니다. 앞 14프레임은 귀를 좌우로 팔랑팔랑, 뒤 7프레임은 귀를 쫑긋 세우고 휙휙 돌립니다. 10fps로 약 2.1초입니다.
+  - `main.js` `DEFAULT_SPRITE_OPTIONS.rows.ear = [{ row: 22, say: 'earFlap' }, 23, { row: 24, say: 'earPerk' }]`, `fpsByMood.ear = 10`.
+  - 대사는 렌더러 `PLAY_LINES`의 `earFlap`("푸루루~" · "후와~")과 `earPerk`("야하!"). 시트 설정의 `say`로 그 프레임이 나올 때 말합니다.
+  - 설정 키는 `config.play.ear`(기본 켜짐), `PLAY_IDS`에 `ear` 추가. 설정 창 상호작용 페이지에 카드가 생기고 **지금 해 보기**로 바로 재생합니다.
+  - 쉬고 있을 때 45초마다 12% 확률로 고르는 혼자 하는 행동 후보에 들어갔습니다(춤 · 도토리 · 간식과 함께). 전용 그림이 없는 예전 시트에서는 후보에서 빠집니다.
+  - 시트가 1536×4576(22줄)에서 **1536×5200(25줄)** 이 되었습니다. 바꾸기 전 시트는 `pets/sprite-before-ear.png`, 원본 그림은 `dev/sprite-sources/ear-1-flap-14frames.png` · `ear-2-perk-7frames.png`입니다.
+- **`dev/sprite-tools/add_rows.py`에 옵션 셋을 더했습니다.** 귀가 칸 밖으로 뻗고 머리가 큰 그림이라 기존 옵션만으로는 붙지 않았습니다.
+  - `--fit` — 칸 너비를 `시트너비 ÷ 프레임수`로, 칸 높이를 가장 큰 프레임에 맞춰 넓힙니다(바닥선은 칸 아래에서 12px 위로 유지). `--cell-w` · `--cell-h` · `--base`로 직접 줄 수도 있습니다.
+  - `--area` — 높이 대신 **보이는 넓이(px²)** 로 배율을 맞춥니다. 머리가 큰 그림은 같은 키라도 훨씬 커 보입니다. 기존 쉬기 그림이 약 9500px²입니다.
+  - `--scale` — 배율을 직접 줍니다. **한 동작을 여러 그림으로 나눠 붙일 때는 반드시 같은 값**을 써야 중간에 크기가 튀지 않습니다. 이번에도 두 그림 모두 `--scale 0.5603`으로 붙였습니다.
+  - 붙일 때 프레임 사이가 10px 미만이면 멈춥니다. `main.js`가 6px 이내로 붙은 그림을 한 프레임으로 합치기 때문입니다.
+- `.gitignore`에 `dev/sprite-tools/preview-*.png`(도구가 만드는 미리보기)를 더했습니다.
+
 ## 0.4.17에서 바뀐 점
 
 - `resources/app/scripts/package-win.js`를 새로 넣었습니다. `package.json`의 `package:win`이 이 파일을 가리키고 있었지만 파일이 없어 `npm run package:win`이 실패했습니다. 이제 Electron 런타임(`node_modules/electron/dist`)을 복사하고 `electron.exe`를 `UsagiPet.exe`로 바꾼 뒤, `resources/app`에 앱 소스를, 앱 폴더에 `pets` · `hooks` · 설명 파일들을 담아 `<루트>/release/UsagiPet-<버전>-win32-x64`를 만듭니다.

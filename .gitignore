@@ -22,3 +22,6 @@ logs/
 
 # 배포본 만들기 출력
 /release/
+
+# 시트 도구가 만드는 미리보기
+dev/sprite-tools/preview-*.png
