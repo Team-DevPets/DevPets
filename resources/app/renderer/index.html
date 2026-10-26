@@ -422,7 +422,9 @@
       : walking ? (dashing && sp.animations.dash ? 'dash' : walking < 0 && sp.animations.walkLeft ? 'walkLeft' : 'walk')
       : mood === 'done' ? 'idle' : mood)
     animName = name
-    if (sp.animations[name]) return { ...sp.animations[name], fps: name === 'idle' && config.calmMode ? 2 : (dashing || quick) && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
+    // 쉬기와 확인 대기는 가만히 숨만 쉬는 그림이라 같은 느린 속도로 그린다 (차분한 모드면 2fps).
+    const calmPose = (name === 'idle' || name === 'waiting') && config.calmMode // 아래 calm() 과 헷갈리지 않게 다른 이름
+    if (sp.animations[name]) return { ...sp.animations[name], fps: calmPose ? 2 : (dashing || quick) && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
     if (name === 'walk' && sp.animations.idle) return sp.animations.idle
     // 남는 줄이 있으면 쉬는 중일 때 번갈아 보여준다
     if (name === 'idle' && sp.extras.length) return sp.extras[idleVariant % sp.extras.length]
