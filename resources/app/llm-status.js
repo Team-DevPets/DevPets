@@ -55,7 +55,16 @@ function providerState(entries, providerId, now) {
     if (state === 'done') list = list.filter(e => now - e.at <= DONE_SHOW_MS)
     if (!list.length) continue
     const top = newest(list)
-    return { state, detail: top.detail || '', source: top.source, sources: [...new Set(list.map(e => e.source))] }
+    return {
+      state,
+      detail: top.detail || '',
+      source: top.source,
+      project: top.project || '',
+      sessionId: top.sessionId || '',
+      since: top.since || top.at,
+      duration: top.duration || 0,
+      sources: [...new Set(list.map(e => e.source))],
+    }
   }
   return { state: 'idle', detail: '', source: '', sources: [] }
 }
@@ -71,22 +80,30 @@ function createProviderTracker() {
       const events = []
       for (const p of PROVIDERS) {
         const cur = providerState(entries, p.id, now)
-        const before = prev[p.id] || { state: 'idle', since: now, source: '', jobStart: 0 }
+        const before = prev[p.id] || { state: 'idle', since: now, source: '', jobStart: 0, project: '', sessionId: '' }
         let since = before.since
         // 한 작업의 시작 시각: 쉬다가(또는 완료 후) 일을 시작한 순간. 중간에 승인 대기가 끼어도 이어서 잰다.
         let jobStart = before.jobStart
+        const newSession = !!cur.sessionId && cur.sessionId !== before.sessionId
         if (cur.state !== before.state) {
           since = now
           const busy = state => state === 'working' || state === 'waiting' || state === 'error'
           if (busy(cur.state) && !busy(before.state)) jobStart = now
-          if (cur.state === 'done' && before.state === 'working') {
-            events.push({ type: 'done', provider: p.id, label: p.label, source: cur.source || before.source, duration: now - (jobStart || before.since) })
-          }
-          if (cur.state === 'waiting' || cur.state === 'error') {
-            events.push({ type: cur.state, provider: p.id, label: p.label, source: cur.source, detail: cur.detail })
-          }
         }
-        prev[p.id] = { state: cur.state, since, source: cur.source || before.source, jobStart }
+        if (cur.state === 'done' && (before.state === 'working' || (before.state === 'done' && newSession))) {
+          events.push({ type: 'done', provider: p.id, label: p.label, source: cur.source || before.source, project: cur.project || before.project, sessionId: cur.sessionId || before.sessionId, duration: cur.duration || now - (jobStart || cur.since || before.since) })
+        }
+        if ((cur.state === 'waiting' || cur.state === 'error') && (cur.state !== before.state || newSession)) {
+          events.push({ type: cur.state, provider: p.id, label: p.label, source: cur.source, project: cur.project, sessionId: cur.sessionId, detail: cur.detail })
+        }
+        prev[p.id] = {
+          state: cur.state,
+          since,
+          source: cur.state === 'idle' ? '' : (cur.source || before.source),
+          project: cur.state === 'idle' ? '' : (cur.project || before.project),
+          sessionId: cur.state === 'idle' ? '' : (cur.sessionId || before.sessionId),
+          jobStart: cur.state === 'idle' ? 0 : jobStart,
+        }
         if (cur.state !== 'idle') {
           providers.push({
             id: p.id,
@@ -96,6 +113,9 @@ function createProviderTracker() {
             jobStart,
             detail: cur.detail,
             source: cur.source,
+            project: cur.project,
+            sessionId: cur.sessionId,
+            duration: cur.duration,
             sources: cur.sources,
             surfaces: [...new Set(cur.sources.map(s => p.surfaces[s]).filter(Boolean))],
           })

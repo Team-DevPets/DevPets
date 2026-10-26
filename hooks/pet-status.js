@@ -17,7 +17,12 @@ function fileFor(sessionId) {
   return path.join(DIR, (SOURCE === 'claude' ? '' : SOURCE + '-') + safe + '.json')
 }
 
-function write(file, mood, detail) {
+function projectName(cwd) {
+  const value = typeof cwd === 'string' ? cwd.replace(/[\\/]+$/, '') : ''
+  return value ? value.split(/[\\/]/).pop().slice(0, 80) : ''
+}
+
+function write(file, mood, detail, event) {
   try {
     // 더 나중에 시작한 hook이 이미 기록했다면 덮어쓰지 않는다.
     try {
@@ -25,7 +30,8 @@ function write(file, mood, detail) {
       if (Number(prev.at) > startedAt) return
     } catch {}
     fs.mkdirSync(DIR, { recursive: true })
-    const text = JSON.stringify({ mood, detail: detail || '', at: startedAt })
+    // 전체 경로나 입력 내용을 저장하지 않고, 목록에서 구분할 최소 정보만 남긴다.
+    const text = JSON.stringify({ mood, detail: detail || '', at: startedAt, sessionId: String(event.session_id || '').slice(0, 80), project: projectName(event.cwd) })
     const tmp = `${file}.${process.pid}.tmp`
     try {
       fs.writeFileSync(tmp, text)
@@ -90,7 +96,7 @@ process.stdin.on('end', () => {
     if (verdict && verdict[0] === 'end') {
       try { fs.unlinkSync(file) } catch {}
     } else if (verdict) {
-      write(file, verdict[0], verdict[1])
+      write(file, verdict[0], verdict[1], event)
     }
   } catch {}
   process.exit(0)

@@ -32,7 +32,7 @@ let tray = null
 let currentHeight = BASE_WINDOW_HEIGHT
 let currentStatus = { mood: 'idle', detail: '', at: 0, sessions: 0, sources: [], providers: [] }
 let quitting = false
-let config = { species: 'rabbit', name: '우사기', x: null, y: null, wander: false, chatter: false, calmMode: true, size: null, claudePath: '', useSprite: true, watchClaudeApp: true, watchChatGPTApp: true, orbit: true, notify: true, meaningBasic: false, meaningAI: true, hookSeen: {}, codexTrustDismissed: false, playAll: true, play: {} }
+let config = { species: 'rabbit', name: '우사기', x: null, y: null, wander: false, chatter: false, calmMode: true, size: null, claudePath: '', useSprite: true, watchClaudeApp: true, watchChatGPTApp: true, orbit: true, notify: true, notifyDone: true, notifyWaiting: true, notifyError: true, notificationsMutedUntil: 0, meaningBasic: false, meaningAI: true, hookSeen: {}, codexTrustDismissed: false, playAll: true, play: {} }
 
 // ---------- 설정 ----------
 
@@ -41,6 +41,7 @@ function loadConfig() {
     fs.mkdirSync(DATA_DIR, { recursive: true })
     config = { ...config, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) }
   } catch {}
+  scheduleNotificationMuteExpiry()
 }
 
 function saveConfig() {
@@ -317,6 +318,7 @@ let codexWatch = null
 let codexWatchTimer = null
 let codexFsWatch = null
 let codexLogKey = ''
+const lastHookEventAt = { claude: 0, codex: 0 }
 
 function startCodexWatch() {
   stopCodexWatch()
@@ -325,7 +327,10 @@ function startCodexWatch() {
   codexWatch.scan()
   const info = codexWatch.info()
   watchLog(`codex-sessions start root=${info.root} found=${info.rootFound} files=${info.files}`)
-  codexWatchTimer = setInterval(() => codexWatch && codexWatch.scan(), 15000) // 새 대화 파일 찾기
+  codexWatchTimer = setInterval(() => {
+    if (codexWatch) codexWatch.scan()
+    pushSettings()
+  }, 15000) // 새 대화 파일 찾기와 연결 진단 시각 갱신
   // 새 파일이 생기면 바로 알아채도록 폴더도 지켜본다 (Windows는 하위 폴더까지 한 번에 지켜볼 수 있다)
   try {
     let timer = null
@@ -349,7 +354,16 @@ function readStatusFile(file, source = '') {
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
     const mood = llmStatus.MOODS.includes(raw.mood) ? raw.mood : 'idle'
-    return { mood, detail: typeof raw.detail === 'string' ? raw.detail.slice(0, 160) : '', at: Number(raw.at) || 0, source }
+    const fallbackId = path.basename(file).replace(/^codex-/, '').replace(/\.json$/i, '')
+    return {
+      mood,
+      detail: typeof raw.detail === 'string' ? raw.detail.slice(0, 160) : '',
+      at: Number(raw.at) || 0,
+      eventAt: Number(raw.at) || 0,
+      source,
+      sessionId: typeof raw.sessionId === 'string' ? raw.sessionId.slice(0, 80) : fallbackId,
+      project: typeof raw.project === 'string' ? raw.project.slice(0, 80) : '',
+    }
   } catch {
     return null
   }
@@ -366,7 +380,9 @@ function collectEntries() {
     const entry = readStatusFile(path.join(SESSIONS_DIR, name), name.startsWith('codex-') ? 'Codex' : 'Claude Code')
     if (!entry) continue
     entries.push(entry)
-    markHookSeen(name.startsWith('codex-') ? 'codex' : 'claude')
+    const target = name.startsWith('codex-') ? 'codex' : 'claude'
+    lastHookEventAt[target] = Math.max(lastHookEventAt[target], entry.at)
+    markHookSeen(target)
   }
   for (const a of WATCHED_APPS) {
     const state = appStates[a.key]
@@ -390,8 +406,43 @@ function collectEntries() {
 function collectStatus(now = Date.now()) {
   const entries = collectEntries()
   const { providers, events } = providerTracker.update(entries, now)
+  const priority = { waiting: 0, error: 1, working: 2, done: 3 }
+  events.sort((a, b) => (priority[a.type] ?? 4) - (priority[b.type] ?? 4))
   for (const event of events) handleProviderEvent(event)
-  return { ...llmStatus.aggregateMood(entries, now), providers }
+  const tasksById = new Map()
+  for (const entry of entries) {
+    if (!llmStatus.MOODS.includes(entry.mood) || entry.mood === 'idle' || now - entry.at > (llmStatus.STALE_MS[entry.mood] || 0)) continue
+    const provider = llmStatus.PROVIDER_OF[entry.source] || 'other'
+    // ChatGPT 화면 감지는 세션 ID가 없다. 같은 상태를 Codex 기록이 거의 동시에 제공하면 한 줄로 합친다.
+    if (entry.source === 'ChatGPT 앱' && entries.some(other =>
+      other !== entry && other.source === 'Codex 앱' && other.mood === entry.mood && Math.abs(other.at - entry.at) < 15000
+    )) continue
+    const key = entry.sessionId ? `${provider}|${entry.sessionId}` : `${provider}|${entry.source || 'unknown'}|${entry.project || ''}`
+    const previous = tasksById.get(key)
+    const nextPriority = priority[entry.mood] ?? 4
+    const previousPriority = previous ? (priority[previous.state] ?? 4) : 99
+    const eventAt = Number(entry.eventAt) || entry.at
+    const previousEventAt = previous ? (Number(previous.eventAt) || previous.at) : 0
+    const newerEvent = eventAt > previousEventAt + 1000
+    const sameMoment = Math.abs(eventAt - previousEventAt) <= 1000
+    if (!previous || newerEvent || (sameMoment && nextPriority < previousPriority) || (sameMoment && nextPriority === previousPriority && entry.at > previous.at)) {
+      tasksById.set(key, {
+        id: key,
+        provider,
+        source: entry.source || '연결된 작업',
+        state: entry.mood,
+        detail: entry.detail || '',
+        at: entry.at,
+        eventAt,
+        since: entry.since || entry.at,
+        project: entry.project || '',
+        sessionId: entry.sessionId || '',
+        navigation: provider === 'other' ? 'unsupported' : 'app',
+      })
+    }
+  }
+  const tasks = [...tasksById.values()].sort((a, b) => (priority[a.state] ?? 4) - (priority[b.state] ?? 4) || b.at - a.at)
+  return { ...llmStatus.aggregateMood(entries, now), providers, tasks }
 }
 
 // 끝난 세션 파일이 남아 있으면 하루 뒤 정리한다 (세션 종료 hook이 못 돈 경우 대비).
@@ -444,6 +495,48 @@ const APP_OF_PROVIDER = { claude: 'claude', gpt: 'chatgpt' }
 const SOURCE_SURFACE = { 'Claude 앱': 'app', 'ChatGPT 앱': 'app', 'Codex 앱': 'app', 'Claude Code': 'cli', Codex: 'cli' }
 const pendingNotice = {}
 let balloonProvider = null
+const noticeHistory = new Map()
+let notificationMuteTimer = null
+
+function notificationAllowed(type) {
+  if (config.notify === false || Date.now() < Number(config.notificationsMutedUntil || 0)) return false
+  const key = { done: 'notifyDone', waiting: 'notifyWaiting', error: 'notifyError' }[type]
+  return !key || config[key] !== false
+}
+
+function scheduleNotificationMuteExpiry() {
+  clearTimeout(notificationMuteTimer)
+  notificationMuteTimer = null
+  const remaining = Number(config.notificationsMutedUntil || 0) - Date.now()
+  if (remaining <= 0) {
+    if (config.notificationsMutedUntil) config.notificationsMutedUntil = 0
+    return
+  }
+  notificationMuteTimer = setTimeout(() => {
+    config.notificationsMutedUntil = 0
+    saveConfig()
+    pushSettings()
+  }, remaining + 100)
+}
+
+function noticeIsDuplicate(provider, options) {
+  if (!options.type || options.type === 'test') return false
+  const now = Date.now()
+  const family = `${provider}|${options.type}`
+  const session = options.sessionId ? `${family}|session|${options.sessionId}` : ''
+  const generic = `${family}|screen`
+  const lastSession = session ? (noticeHistory.get(session) || 0) : 0
+  const lastGeneric = noticeHistory.get(generic) || 0
+  // 세션 기록끼리는 각 작업을 살리고, 세션 ID 없는 화면 감지는 같은 종류의 최근 세션 알림과 합친다.
+  if ((session && (now - lastSession < 120000 || now - lastGeneric < 45000)) ||
+      (!session && (now - lastGeneric < 45000 || [...noticeHistory].some(([key, at]) => key.startsWith(`${family}|session|`) && now - at < 45000)))) {
+    watchLog(`notify deduplicated [${provider}] type=${options.type} session=${options.sessionId || '-'}`)
+    return true
+  }
+  noticeHistory.set(session || generic, now)
+  for (const [key, at] of noticeHistory) if (now - at > 5 * 60 * 1000) noticeHistory.delete(key)
+  return false
+}
 
 function appInForeground(provider) {
   const info = appInfo[APP_OF_PROVIDER[provider]]
@@ -492,10 +585,10 @@ function notifyBalloon(provider, title, content) {
   }
 }
 
-function notify(provider, title, content) {
-  if (config.notify === false || process.platform !== 'win32') return
+function notify(provider, title, content, options = {}) {
+  if (!notificationAllowed(options.type) || process.platform !== 'win32' || noticeIsDuplicate(provider, options)) return false
   watchLog(`notify [${provider}] ${title} — ${content}`)
-  if (!Notification.isSupported()) return notifyBalloon(provider, title, content)
+  if (!Notification.isSupported()) { notifyBalloon(provider, title, content); return true }
   try {
     const notice = new Notification({ title, body: content, ...(llmIconImages[provider] ? { icon: llmIconImages[provider] } : {}) })
     notice.on('show', () => watchLog(`toast shown [${provider}]`))
@@ -510,9 +603,11 @@ function notify(provider, title, content) {
     notice.show()
     recentNotices.push(notice)
     if (recentNotices.length > 8) recentNotices.shift()
+    return true
   } catch (error) {
     watchLog(`toast error ${error.message} — 트레이 풍선으로 대신 보냄`)
     notifyBalloon(provider, title, content)
+    return true
   }
 }
 
@@ -522,7 +617,9 @@ function handleProviderEvent(event) {
   if (event.type === 'done') {
     if (surface === 'app' && appInForeground(event.provider)) return
     if (event.duration < (surface === 'app' ? 15000 : 60000)) return
-    notify(event.provider, `${event.source || event.label} 작업 완료`, `${llmStatus.formatDuration(event.duration)} 걸렸어요. 눌러서 열기`)
+    const project = event.project ? `${event.project} · ` : ''
+    const session = event.sessionId ? ` · 세션 ${event.sessionId.slice(0, 8)}` : ''
+    notify(event.provider, `${project}${event.source || event.label} 작업 완료${session}`, `${llmStatus.formatDuration(event.duration)} 걸렸어요. 눌러서 앱을 열어요. 특정 세션으로 바로 이동하지는 않아요.`, { ...event, type: 'done' })
     return
   }
   // 확인 대기 · 오류는 잠깐 기다렸다가 그대로면 알린다.
@@ -530,8 +627,11 @@ function handleProviderEvent(event) {
     const now = (currentStatus.providers || []).find(p => p.id === event.provider)
     if (!now || now.state !== event.type) return
     if (surface === 'app' && appInForeground(event.provider)) return
-    const title = event.type === 'waiting' ? `${event.source || event.label}가 확인을 기다려요` : `${event.source || event.label} 오류`
-    notify(event.provider, title, event.detail || (event.type === 'waiting' ? '권한 확인이 필요해요' : '응답이 중단됐어요'))
+    const project = event.project ? `${event.project} · ` : ''
+    const session = event.sessionId ? ` · 세션 ${event.sessionId.slice(0, 8)}` : ''
+    const title = event.type === 'waiting' ? `${project}${event.source || event.label}가 확인을 기다려요${session}` : `${project}${event.source || event.label} 오류${session}`
+    const detail = event.detail || (event.type === 'waiting' ? '권한 확인이 필요해요' : '응답이 중단됐어요')
+    notify(event.provider, title, `${detail} · 눌러서 앱을 열어요. 특정 세션으로 바로 이동하지는 않아요.`, { ...event, type: event.type })
   }, event.type === 'waiting' ? 15000 : 3000)
 }
 
@@ -1136,6 +1236,8 @@ const appExe = {} // key → 앱의 실행 파일 경로 (실행 중에 알게 �
 const appInfo = {} // key → { fg: 앞에 떠 있는지, hidden: 트레이로 닫혀 있는지, window }
 let appWatcher = null
 let appWatcherRetry = null
+let appWatchStartedAt = 0
+let appWatchLastReadingAt = 0
 
 function watchLog(line) {
   try {
@@ -1176,6 +1278,7 @@ function startAppWatch() {
     env: { ...process.env, PET_APPS: JSON.stringify(payload) },
   })
   appWatcher = child
+  appWatchStartedAt = Date.now()
   watchLog(`start pid=${child.pid} apps=${JSON.stringify(payload)}`)
   const track = {} // key → { busySince, lastBusyAt, idleCount, lastKey, lines }
   let buffer = ''
@@ -1220,10 +1323,21 @@ function doneButtonsGrew(s, t) {
 function handleAppReading(s, t) {
   t.lines++
   const cands = Array.isArray(s.cands) ? s.cands : s.cands ? [s.cands] : []
-  appInfo[s.key] = { app: !!s.app, fg: !!s.fg, hidden: !!s.hidden, window: !!s.window }
+  const now = Date.now()
   // 답 아래 버튼 수(doneCount)는 대화를 스크롤하기만 해도 바뀌어서 기록 기준에서는 뺀다 (줄에는 함께 적는다).
   const key = `${s.app}|${s.window}|${s.hidden}|${s.busy}|${s.label}|${s.approve}`
-  if (key !== t.lastKey) pushSettings()
+  const changed = key !== t.lastKey
+  appWatchLastReadingAt = now
+  appInfo[s.key] = {
+    app: !!s.app,
+    fg: !!s.fg,
+    hidden: !!s.hidden,
+    window: !!s.window,
+    lastSeenAt: now,
+    lastEventAt: changed ? now : ((appInfo[s.key] && appInfo[s.key].lastEventAt) || 0),
+    method: 'Windows 화면 버튼 감지',
+  }
+  if (changed) pushSettings()
   // 상태가 바뀔 때, 새 후보 버튼 이름이 보일 때, 그 밖에는 1분에 한 번만 기록한다.
   if (key !== t.lastKey || cands.length || t.lines % 60 === 1) {
     watchLog(`[${s.key}] app=${s.app} window=${s.window}${s.hidden ? ' (hidden)' : ''} fg=${s.fg} busy=${s.busy} label=${s.label || '-'} approve=${s.approve || '-'} done=${s.doneCount ?? '-'} cpu=${s.cpu} scanMs=${s.scanMs}${cands.length ? ` candidates=${JSON.stringify(cands)}` : ''}`)
@@ -1236,7 +1350,6 @@ function handleAppReading(s, t) {
     saveConfig()
     refreshLlmIcons()
   }
-  const now = Date.now()
   if (s.busy) t.lastBusyAt = now
   // ChatGPT 앱: Codex 작업 기록이 같은 작업을 정확히 알려 주고 있으면 화면 감지는 물러난다.
   // 창이 다른 창에 가려지면 앱이 화면 정보를 갱신하지 않아 '중지' 버튼이 끝난 뒤에도 남아 보이기 때문이다 (로그 14:15:07 완료 → 14:15:27까지 중지).
@@ -1579,6 +1692,9 @@ const SETTABLE = {
   chatter: null,
   orbit: null,
   notify: null,
+  notifyDone: null,
+  notifyWaiting: null,
+  notifyError: null,
   meaningBasic: null,
   meaningAI: null,
   size: () => { applyWindowHeight(); pushViewport() },
@@ -1630,6 +1746,9 @@ function settingsState() {
       chatter: config.chatter === true,
       orbit: config.orbit !== false,
       notify: config.notify !== false,
+      notifyDone: config.notifyDone !== false,
+      notifyWaiting: config.notifyWaiting !== false,
+      notifyError: config.notifyError !== false,
       meaningBasic: config.meaningBasic === true,
       meaningAI: config.meaningAI !== false,
       size: petHeight(),
@@ -1650,6 +1769,9 @@ function settingsState() {
       supported: process.platform === 'win32',
       watching: !!appWatcher,
       info: appInfo[a.key] || null,
+      method: 'Windows 화면 버튼 감지',
+      lastSeenAt: appInfo[a.key] ? appInfo[a.key].lastSeenAt : 0,
+      lastEventAt: appInfo[a.key] ? appInfo[a.key].lastEventAt : 0,
       doneAfterIdle: a.doneAfterIdle,
     })),
     hooks: Object.entries(HOOK_TARGETS).map(([id, t]) => ({
@@ -1658,12 +1780,29 @@ function settingsState() {
       file: homeShort(t.file),
       installed: hooksInstalled(id),
       seen: (config.hookSeen && config.hookSeen[id]) || 0,
+      lastEventAt: lastHookEventAt[id],
     })),
     node: nodeInfo,
     codexSessions: (() => {
       const info = codexWatch ? codexWatch.info() : null
-      return { on: config.watchCodexSessions !== false, rootFound: !!(info && info.rootFound), files: info ? info.files : 0, active: info ? info.active : 0, lastEventAt: info ? info.lastEventAt : 0, root: homeShort(require('./codex-sessions').defaultRoot()) }
+      return {
+        on: config.watchCodexSessions !== false,
+        rootFound: !!(info && info.rootFound),
+        files: info ? info.files : 0,
+        active: info ? info.active : 0,
+        lastEventAt: info ? info.lastEventAt : 0,
+        root: homeShort(require('./codex-sessions').defaultRoot()),
+        tasks: (currentStatus.tasks || []).filter(task => task.source === 'Codex 앱'),
+      }
     })(),
+    notificationsMutedUntil: Number(config.notificationsMutedUntil) || 0,
+    diagnostics: {
+      appWatchRunning: !!appWatcher,
+      appWatchStartedAt,
+      appWatchLastReadingAt,
+      appWatchMethod: 'Windows UI Automation · 버튼 화면 감지',
+      hookLastEventAt: Math.max(lastHookEventAt.claude, lastHookEventAt.codex),
+    },
     codexTrustDismissed: !!config.codexTrustDismissed,
     icons: llmIcons,
     sprite: sprite ? { key: sprite.key, source: sprite.source, rows: sprite.rows, file: homeShort(sprite.imagePath), animations: Object.keys(sprite.animations) } : null,
@@ -1766,9 +1905,8 @@ function testNotify(kind) {
     error: ['claude', 'Claude 앱 오류', '응답이 중단됐어요'],
   }
   const [provider, title, content] = samples[kind] || samples.done
-  if (config.notify === false) return 'off'
-  notify(provider, `[시험] ${title}`, content)
-  return 'sent'
+  if (!notificationAllowed('test')) return 'off'
+  return notify(provider, `[시험] ${title}`, content, { type: 'test' }) ? 'sent' : 'off'
 }
 
 const SETTINGS_ACTIONS = {
@@ -1801,6 +1939,29 @@ const SETTINGS_ACTIONS = {
   open: ([target]) => { openPath(target); return true },
   nodeDownload: () => { shell.openExternal('https://nodejs.org/ko/download'); return true },
   testNotify: ([kind]) => testNotify(kind),
+  muteNotifications: ([minutes]) => {
+    const duration = Number(minutes)
+    if (![15, 30, 60, 120].includes(duration)) return false
+    config.notificationsMutedUntil = Date.now() + duration * 60 * 1000
+    scheduleNotificationMuteExpiry()
+    saveConfig()
+    pushSettings()
+    return config.notificationsMutedUntil
+  },
+  resumeNotifications: () => {
+    config.notificationsMutedUntil = 0
+    scheduleNotificationMuteExpiry()
+    saveConfig()
+    pushSettings()
+    return true
+  },
+  refreshConnections: () => {
+    watchLog('connection diagnostics: manual refresh')
+    restartAppWatch()
+    startCodexWatch()
+    pushSettings()
+    return true
+  },
   playNow: ([id]) => playNow(id),
   codexTrust: ([dismissed]) => { config.codexTrustDismissed = !!dismissed; saveConfig(); pushSettings(); return true },
   quit: () => { app.quit(); return true },

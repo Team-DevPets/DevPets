@@ -11,7 +11,7 @@ window.addEventListener('unhandledrejection', e => { try { api.reportError(`unha
 let state = null
 let sheet = null // { key, url, animations, refHeight, image }
 let page = 'home'
-const ui = { bubbleMode: 'ai', notifyKind: 'done', codexMsg: '', testMsg: '', testTimer: null }
+const ui = { bubbleMode: 'ai', notifyKind: 'done', codexMsg: '', testMsg: '', focusMsg: '', connectionMsg: '', testTimer: null }
 
 const PAGES = [
   { id: 'home', label: '홈', icon: '<path d="M4 10.6 12 4l8 6.6V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1Z"/>' },
@@ -245,6 +245,18 @@ function renderHome(now) {
     </article>`
   }).join('')
 
+  const tasks = (state.status && state.status.tasks) || []
+  const taskRows = tasks.slice(0, 12).map(task => {
+    const project = task.project || '프로젝트 미확인'
+    const session = task.sessionId ? `세션 ${task.sessionId.slice(0, 8)}` : (task.source.includes('앱') ? '앱 단위 감지' : '세션 구분 정보 없음')
+    const provider = task.provider === 'gpt' ? 'gpt' : task.provider === 'claude' ? 'claude' : ''
+    const action = provider ? `<button class="btn btn-quiet btn-sm" data-act="focus" data-arg="${provider}">앱 열기</button>` : ''
+    return `<div class="row">
+      <div class="row-text"><span class="row-title">${esc(project)} · ${esc(task.source)}</span><span class="row-desc">${esc(MOOD_LABEL[task.state] || task.state)} · ${esc(task.detail || session)} · ${esc(session)}</span></div>
+      ${pill(task.state, MOOD_LABEL[task.state] || task.state)}${action}
+    </div>`
+  }).join('')
+
   const conns = [
     ['Claude 앱', '답변 중인지 화면에서 확인해요', appConn(appOf('claude'))],
     ['ChatGPT 앱', '채팅과 Codex 화면을 함께 확인해요', appConn(appOf('chatgpt'))],
@@ -281,6 +293,12 @@ function renderHome(now) {
     <section style="display:flex;flex-direction:column;gap:12px" aria-labelledby="ai-now">
       <div class="section-head"><h2 class="h2" id="ai-now">AI 현황</h2><span class="sub">펫에 마우스를 올려도 볼 수 있어요</span></div>
       <div class="cols">${cards}</div>
+    </section>
+
+    <section class="card" aria-labelledby="session-tasks">
+      <div class="section-head"><h2 class="h2" id="session-tasks">프로젝트 · 세션별 작업</h2><span class="sub">${tasks.length}개 · 확인이 필요한 작업부터 표시</span></div>
+      ${tasks.length ? `<div class="rows">${taskRows}</div>` : '<p class="note">진행 중인 작업이 없어요. Codex 작업 기록이나 Claude Code·Codex hooks가 연결되면 프로젝트와 세션이 여기에 표시돼요.</p>'}
+      <p class="note">앱 화면 감지는 세션을 구분할 수 없어 앱 단위로 표시해요. Codex 기록과 hooks는 프로젝트 이름·세션 식별자를 보여 줍니다. 알림을 눌러도 앱까지만 열리고 특정 세션으로 바로 이동하지는 않아요.</p>
     </section>
 
     <div class="cols" style="align-items:flex-start">
@@ -359,6 +377,7 @@ function renderAi() {
         <div class="fact"><span>상태</span>${pill(conn.kind, conn.text)}</div>
         <div class="fact"><span>찾는 버튼</span><span>${esc(buttons)}</span></div>
         <div class="fact"><span>완료로 보는 때</span><span>버튼이 ${a.doneAfterIdle}초 동안 안 보이면</span></div>
+        <div class="fact"><span>감지 방식</span><span>${esc(a.method)} · 마지막 상태 변화 ${a.lastEventAt ? timeOf(a.lastEventAt) : '아직 없음'}</span></div>
       </div>
       <div class="btns">
         <button class="btn btn-quiet btn-sm pull-left" data-act="open" data-arg="log">감지 기록 열기</button>
@@ -378,7 +397,7 @@ function renderAi() {
       : `<button class="btn btn-secondary btn-sm" data-act="hooks" data-arg="${id}" data-arg2="true">연결하기</button>`
     return `<div class="row">
       ${avatar(id === 'codex' ? 'gpt' : 'claude', 'sm')}
-      <div class="row-text"><span class="row-title">${esc(h.label)}</span><span class="row-desc"><code>${esc(h.file)}</code> · ${esc(what)}</span></div>
+      <div class="row-text"><span class="row-title">${esc(h.label)}</span><span class="row-desc"><code>${esc(h.file)}</code> · ${esc(what)} · 마지막 소식 ${h.lastEventAt ? timeOf(h.lastEventAt) : '아직 없음'}</span></div>
       ${pill(conn.kind, conn.text)}${button}
     </div>`
   }).join('')
@@ -388,11 +407,21 @@ function renderAi() {
       <span style="flex:1 1 260px">이 PC에서 Node.js를 찾지 못했어요. Claude Code·Codex 알림은 Node.js가 있어야 실행돼요.</span>
       <button class="btn btn-secondary btn-sm" data-act="nodeDownload">Node.js 내려받기</button>
     </div>` : ''
+  const diagnostics = state.diagnostics || {}
 
   return `
   <div class="page">
     ${header('AI 연결', 'Claude와 GPT가 일하는 걸 우사기가 알아챌 수 있게 이어 줘요.')}
     ${trust}
+    <section class="card" aria-labelledby="connection-diagnostics">
+      <div class="section-head"><h2 class="h2" id="connection-diagnostics">연결 진단</h2><span class="sub">화면 감지와 작업 기록을 다시 연결해요.</span></div>
+      <div class="rows">
+        ${row('감지 방법', diagnostics.appWatchMethod || '확인 중', `마지막 수신 ${diagnostics.appWatchLastReadingAt ? timeOf(diagnostics.appWatchLastReadingAt) : '아직 없음'} · 감시 ${diagnostics.appWatchRunning ? '실행 중' : '중지됨'}`)}
+        ${row('마지막 hook 소식', 'Claude Code · Codex', diagnostics.hookLastEventAt ? timeOf(diagnostics.hookLastEventAt) : '아직 받은 소식 없음')}
+        ${row('마지막 Codex 기록', 'ChatGPT 앱 작업 기록', state.codexSessions.lastEventAt ? timeOf(state.codexSessions.lastEventAt) : '아직 받은 소식 없음')}
+      </div>
+      <div class="btns"><button class="btn btn-secondary btn-sm" data-act="refreshConnections">연결 다시 확인</button>${ui.connectionMsg ? `<span class="note" role="status">${esc(ui.connectionMsg)}</span>` : ''}</div>
+    </section>
     <section style="display:flex;flex-direction:column;gap:12px" aria-labelledby="desk">
       <div class="section-head"><h2 class="h2" id="desk">데스크톱 앱</h2><span class="sub">앱 화면의 버튼으로 답변 중인지 알아채요. 따로 설치할 건 없어요.</span></div>
       <div class="cols">${appCards}</div>
@@ -539,6 +568,11 @@ function renderNotify() {
   const on = state.config.notify
   const win32 = state.platform === 'win32'
   const kind = KINDS[ui.notifyKind]
+  const mutedUntil = Number(state.notificationsMutedUntil) || 0
+  const muted = mutedUntil > state.now
+  const muteControls = muted
+    ? `<span class="note">${timeOf(mutedUntil)}까지 알림을 쉬어요.</span><button class="btn btn-secondary btn-sm" data-act="resumeNotifications">알림 다시 켜기</button>`
+    : `<button class="btn btn-quiet btn-sm" data-act="muteNotifications" data-arg="30">30분 끄기</button><button class="btn btn-quiet btn-sm" data-act="muteNotifications" data-arg="60">1시간 끄기</button>`
   const rules = [
     ['done', '완료', '오래 걸린 작업이 끝났을 때', '데스크톱 앱은 15초, 터미널(Claude Code · Codex)은 60초 넘게 걸린 작업만. 걸린 시간을 함께 알려요.'],
     ['waiting', '확인 대기', '15초 넘게 기다리고 있을 때', '금방 누르는 승인은 조용히 넘어가요.'],
@@ -551,8 +585,13 @@ function renderNotify() {
     <section class="card big" style="flex-direction:row;flex-wrap:wrap;padding:0;gap:0;overflow:hidden" aria-labelledby="main-switch">
       <div style="flex:1 1 380px;padding:28px;display:flex;flex-direction:column;gap:20px">
         <div style="display:flex;align-items:center;gap:16px">
-          <div class="row-text"><h2 class="h2-jua" id="main-switch">완료·확인 대기 알림</h2><span class="sub">알림을 누르면 그 앱이 앞으로 와요.</span></div>
-          ${sw(on, 'data-set="notify"', '완료·확인 대기 알림', !win32)}
+          <div class="row-text"><h2 class="h2-jua" id="main-switch">모든 알림</h2><span class="sub">알림을 누르면 해당 앱이 열려요. 세션 바로 이동은 지원하지 않아요.</span></div>
+          ${sw(on, 'data-set="notify"', '모든 알림', !win32)}
+        </div>
+        <div class="rows" aria-label="알림 종류별 설정">
+          ${switchRow('notifyDone', '완료 알림', '오래 걸린 작업이 끝났을 때', !win32)}
+          ${switchRow('notifyWaiting', '승인 요청 알림', '확인이 필요한 작업은 우선해서 알려요', !win32)}
+          ${switchRow('notifyError', '오류 알림', '작업이 오류로 멈췄을 때', !win32)}
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <span class="row-title" id="kind-label">미리볼 알림</span>
@@ -564,7 +603,13 @@ function renderNotify() {
           <div class="toast-text"><span class="toast-app">우사기 펫 · 지금</span><span class="toast-title">${esc(kind.title)}</span><span class="toast-body">${esc(kind.body)}</span></div>
         </div>
         ${!win32 ? '<p class="note">알림은 Windows에서만 보낼 수 있어요.</p>' : on ? '' : '<p class="note">알림이 꺼져 있어요. 상태는 펫의 아이콘과 상태 카드로만 보여요.</p>'}
-        <div class="btns" style="align-items:center"><button class="btn btn-secondary btn-sm" data-act="testNotify" data-arg="${ui.notifyKind}"${on && win32 ? '' : ' disabled'}>이 알림 직접 받아 보기</button>${ui.testMsg ? `<span class="note" role="status">${esc(ui.testMsg)}</span>` : ''}</div>
+        <div class="btns" style="align-items:center"><button class="btn btn-secondary btn-sm" data-act="testNotify" data-arg="${ui.notifyKind}"${on && win32 && !muted ? '' : ' disabled'}>이 알림 직접 받아 보기</button>${ui.testMsg ? `<span class="note" role="status">${esc(ui.testMsg)}</span>` : ''}</div>
+        <div class="rows">
+          <div class="row"><div class="row-text"><span class="row-title">잠시 알림 끄기</span><span class="row-desc">${muted ? '집중이 끝나면 다시 켤 수 있어요.' : '완료·승인·오류 알림을 잠깐 멈춰요.'}</span></div><div class="btns">${muteControls}</div></div>
+          ${switchRow('wander', '자동 산책', '집중할 때 끄면 펫 위치가 고정돼요')}
+          ${switchRow('orbit', '작업 아이콘 움직임', '끄면 펫 주위를 도는 아이콘이 멈춰요')}
+        </div>
+        ${ui.focusMsg ? `<p class="note" role="status">${esc(ui.focusMsg)}</p>` : ''}
       </div>
       <div class="stage" style="flex:0 1 260px;min-height:300px">
         ${GROUND(260)}
@@ -849,6 +894,18 @@ document.addEventListener('click', async event => {
     render()
     clearTimeout(ui.testTimer)
     ui.testTimer = setTimeout(() => { ui.testMsg = ''; render() }, 8000)
+  } else if (act === 'muteNotifications') {
+    const until = await api.action('muteNotifications', el.dataset.arg)
+    ui.focusMsg = until ? '알림을 잠시 껐어요.' : '알림을 끄지 못했어요.'
+    render()
+  } else if (act === 'resumeNotifications') {
+    const resumed = await api.action('resumeNotifications')
+    ui.focusMsg = resumed ? '알림을 다시 켰어요.' : '알림을 다시 켜지 못했어요.'
+    render()
+  } else if (act === 'refreshConnections') {
+    const refreshed = await api.action('refreshConnections')
+    ui.connectionMsg = refreshed ? '화면 감지와 Codex 기록 연결을 다시 시작했어요.' : '연결을 다시 확인하지 못했어요.'
+    render()
   } else if (act === 'focus') {
     await api.action('focus', el.dataset.arg)
   } else {

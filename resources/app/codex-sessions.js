@@ -36,6 +36,12 @@ function defaultRoot() {
   return path.join(home, 'sessions')
 }
 
+// 작업 목록에는 프로젝트 이름만 보여 준다. 전체 경로와 대화 내용은 노출하지 않는다.
+function projectName(cwd) {
+  const value = typeof cwd === 'string' ? cwd.replace(/[\\/]+$/, '') : ''
+  return value ? value.split(/[\\/]/).pop().slice(0, 80) : ''
+}
+
 function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now = Date.now } = {}) {
   const files = new Map() // 파일 경로 → 상태
   let lastEventAt = 0
@@ -79,6 +85,8 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
       skipPartial: !isNew && size > FIRST_TAIL_BYTES,
       ignore: isSubagent(meta),
       originator: meta && meta.originator ? String(meta.originator) : '',
+      sessionId: String((meta && (meta.id || meta.thread_id)) || path.basename(file).replace(/^rollout-/, '').replace(/\.jsonl$/i, '')).slice(0, 80),
+      project: projectName(meta && (meta.cwd || meta.project_path)),
       turn: null, // { id, startedAt, detail, lastAt }
       done: null, // { at, duration }
       mtimeMs,
@@ -184,9 +192,9 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
       if (f.turn) {
         if (t - Math.max(f.mtimeMs, f.turn.lastAt) > OPEN_TURN_MAX_MS) continue
         // 진행 중인 동안은 '지금' 소식으로 둔다 (생각만 오래 해도 쉬는 중으로 바뀌지 않게)
-        list.push({ mood: 'working', detail: f.turn.detail, at: t, since: f.turn.startedAt, source: 'Codex 앱' })
+        list.push({ mood: 'working', detail: f.turn.detail, at: t, eventAt: f.turn.lastAt, since: f.turn.startedAt, source: 'Codex 앱', sessionId: f.sessionId, project: f.project })
       } else if (f.done && t - f.done.at <= DONE_KEEP_MS) {
-        list.push({ mood: 'done', detail: '', at: f.done.at, duration: f.done.duration, source: 'Codex 앱' })
+        list.push({ mood: 'done', detail: '', at: f.done.at, eventAt: f.done.at, duration: f.done.duration, source: 'Codex 앱', sessionId: f.sessionId, project: f.project })
       }
     }
     return list
@@ -200,4 +208,4 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
   return { scan, poll, entries, info, root }
 }
 
-module.exports = { createCodexSessionWatcher, STEP_LABEL, defaultRoot }
+module.exports = { createCodexSessionWatcher, STEP_LABEL, defaultRoot, projectName }
