@@ -13,7 +13,8 @@ Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
 - **배포본 ZIP을 만들어 뒀다**: `release\UsagiPet-0.4.17-win32-x64.zip` (118MB). GitHub Releases 업로드는 민준이 직접 할 예정이라 **아직 안 올라갔다.**
 - 디스크에 `resources\app\node_modules`(276MB)와 `release`(397MB)가 있다. 둘 다 깃 바깥이라 지워도 되고, 지우면 다시 `npm install`해야 F5 실행·배포본 만들기가 된다.
-- **main은 GitHub에서 보호되어 있다.** 직접 푸시는 거부되므로 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)).
+- **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). 깃이 막아 주지는 않는다 — Free 플랜 + 비공개 레포라 브랜치 보호를 쓸 수 없다.
+- 멤버는 hodu42(admin) · uzinkkk(write) 둘이다. **PR 을 올리기 직전에 `main`을 pull 받아 작업 브랜치에 반영한다.**
 - 안 한 일: Electron 33.2.1에 high 2건 취약점 경고가 뜨지만 올리지 않았다. 올리면 창·트레이·알림·토스트를 전부 다시 확인해야 한다.
 - 남은 아이디어는 맨 아래 "남은 아이디어" 항목에 있다.
 
@@ -59,7 +60,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 
 ## 깃
 
-- 커밋 메시지 · 브랜치 · PR · 태그 규칙은 [깃-규칙.md](깃-규칙.md)에 정리해 두었다. **작업은 `<타입>/<설명>` 브랜치에서 하고 PR(Squash and merge)로 합친다. main 은 보호되어 있어 직접 푸시가 거부된다** (문서 한 줄이라도 PR 로 올린다). 버전을 올리는 커밋은 `release: 0.4.18 — 제목` 형식으로 적고, 머지된 뒤 `v0.4.18` 태그를 붙인다.
+- 커밋 메시지 · 브랜치 · PR · 태그 규칙은 [깃-규칙.md](깃-규칙.md)에 정리해 두었다. **작업은 `<타입>/<설명>` 브랜치에서 하고 PR(Squash and merge)로 합친다. main 에는 직접 푸시하지 않는다** (문서 한 줄이라도 PR 로). **PR 을 올리기 직전에 `git switch main && git pull` → 작업 브랜치에서 `git merge main`** 으로 최신으로 맞춘다. 버전을 올리는 커밋은 `release: 0.4.20 — 제목` 형식으로 적고, 머지된 뒤 `v0.4.20` 태그를 붙인다.
 - 레포: [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) (main 브랜치). 이 폴더가 그대로 레포다.
 - Electron 런타임(`UsagiPet.exe` · dll · locales), `logs\`, `.claude\`, `release\`는 `.gitignore`로 뺀다. GitHub는 파일 한 개를 100MB까지만 받으므로 180MB인 실행 파일은 올릴 수 없다.
 - 클론한 사람은 `resources\app`에서 `npm install` → `npm start`. 시트는 `resources\app\pets`에서 찾으니 루트 `pets`를 복사하거나 junction으로 연결해야 춤·싸움이 나온다.
