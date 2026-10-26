@@ -31,6 +31,12 @@ npm install
 npm start
 ```
 
+`npm install` 뒤에 `npm start` 가 "Electron 을 찾지 못했어요" 라고 하면, npm 이 설치 스크립트를 막아 Electron 본체(약 240MB)를 안 받은 경우입니다. `resources/app` 에서 한 번 받아 주면 됩니다.
+
+```bash
+node node_modules/electron/install.js
+```
+
 `package.json`은 레포 루트가 아니라 **`resources/app`** 안에 있습니다. 그 폴더가 곧 Electron 앱 본체여서 `npm` 명령은 모두 거기서 실행합니다.
 
 | 명령 | 하는 일 |
