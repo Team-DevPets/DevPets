@@ -129,6 +129,8 @@ def main():
     ap.add_argument('--cell-w', type=int, default=0, help='칸 너비를 직접 지정 (기본 192, --fit 이면 자동)')
     ap.add_argument('--cell-h', type=int, default=0, help='칸 높이를 직접 지정 (기본 208, --fit 이면 자동)')
     ap.add_argument('--base', type=int, default=0, help='칸 위에서 바닥선까지 거리 (기본 196)')
+    ap.add_argument('--replace', type=int, default=-1,
+                    help='줄을 새로 붙이는 대신 그 줄(0부터)을 이 그림으로 바꾼다. 시트 높이와 다른 줄 번호는 그대로 유지된다')
     ap.add_argument('--dry-run', action='store_true', help='시트를 바꾸지 않고 미리보기만 만든다')
     args = ap.parse_args()
 
@@ -171,14 +173,24 @@ def main():
     if (cell_w, cell_h, base) != (CELL_W, CELL_H, BASE):
         print(f'칸 {cell_w}x{cell_h}, 바닥선 {base} (기본 {CELL_W}x{CELL_H}, {BASE})')
 
-    new = Image.new('RGBA', (SW, SH + len(groups) * cell_h), (0, 0, 0, 0))
-    new.paste(sheet, (0, 0))
+    replacing = args.replace >= 0
+    if replacing:
+        if len(groups) != 1:
+            sys.exit(f'--replace 는 한 줄짜리 그림만 바꿉니다 (지금 {len(groups)}줄 — --per-row 로 맞추세요)')
+        if (args.replace + 1) * cell_h > SH:
+            sys.exit(f'{args.replace}줄은 시트에 없습니다 (칸 {cell_h}px 기준 {SH // cell_h}줄)')
+        new = sheet.copy()
+        new.paste((0, 0, 0, 0), (0, args.replace * cell_h, SW, (args.replace + 1) * cell_h)) # 그 줄만 비운다
+    else:
+        new = Image.new('RGBA', (SW, SH + len(groups) * cell_h), (0, 0, 0, 0))
+        new.paste(sheet, (0, 0))
     for r, group in enumerate(groups):
+        top = args.replace * cell_h if replacing else SH + r * cell_h
         spans = []
         for i, g in enumerate(group):
             x = round(cell_w / 2 + cell_w * i - body_center(np.array(g)))
-            y = SH + r * cell_h + base - g.height
-            if x < cell_w * i + 2 or x + g.width > cell_w * (i + 1) - 2 or y < SH + r * cell_h + 4:
+            y = top + base - g.height
+            if x < cell_w * i + 2 or x + g.width > cell_w * (i + 1) - 2 or y < top + 4:
                 sys.exit(f'{r}줄 {i}번 프레임이 칸({cell_w}x{cell_h}) 밖으로 나갑니다. '
                          '--fit 을 주거나 --per-row 를 줄이거나 --stand 로 배율을 다시 잡으세요.')
             new.alpha_composite(g, (x, y))
@@ -192,7 +204,9 @@ def main():
 
     preview = f'dev/sprite-tools/preview-{args.name}.png'
     os.makedirs(os.path.dirname(preview), exist_ok=True)
-    crop = new.crop((0, max(0, SH - cell_h), SW, new.height))
+    # 바꾼 줄(또는 새로 붙인 줄)을 바로 위 줄과 함께 보여 준다 — 크기를 견주어 보라고
+    crop = (new.crop((0, max(0, (args.replace - 1) * cell_h), SW, (args.replace + 1) * cell_h)) if replacing
+            else new.crop((0, max(0, SH - cell_h), SW, new.height)))
     bg = Image.new('RGBA', crop.size, (235, 235, 235, 255))
     bg.alpha_composite(crop)
     bg.save(preview)
@@ -206,6 +220,10 @@ def main():
         shutil.copy2(args.sheet, backup)
         print('백업:', backup)
     new.save(args.sheet)
+    if replacing:
+        print(f'시트 저장: {args.sheet} {new.size} (크기 그대로), {args.replace}줄을 {len(groups[0])}프레임으로 바꿨습니다.')
+        print('줄 번호가 바뀌지 않으니 main.js 는 고칠 게 없습니다. 프레임 수가 달라졌으면 그 동작의 fps 를 확인하세요.')
+        return
     print(f'시트 저장: {args.sheet} {new.size}, 새 줄 {len(groups)}개 (프레임 {[len(g) for g in groups]})')
     print(f'새 줄 번호(0부터): {first_new} ~ {first_new + len(groups) - 1}')
     print('main.js DEFAULT_SPRITE_OPTIONS.rows 또는 pets/sprite.json 의 rows 에 이 번호를 연결하세요.')
