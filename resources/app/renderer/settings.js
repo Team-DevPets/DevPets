@@ -644,9 +644,10 @@ const PLAYS = [
   { id: 'flee', emoji: '💨', title: '휘저으면 도망가기', desc: '위험을 느끼면 재빨리 물러나는 우사기. "우라!" 하고 잰걸음으로 달아나요.', when: '펫 근처에서 마우스를 빠르게 흔들 때 (20초에 한 번)' },
   { id: 'nap', emoji: '🥞', title: '도라야키 이불 낮잠', desc: '커다란 도라야키를 이불 삼아 자요. 자는 동안은 산책을 쉬어요.', when: '3분 동안 컴퓨터를 안 쓰면 · 마우스를 움직이거나 누르면 깨요' },
   { id: 'greet', emoji: '👋', title: '돌아오면 반기기', desc: '자리를 비웠다 돌아오면 점프하며 "야하!" 하고 반겨요.', when: '2분 넘게 비웠다가 돌아왔을 때' },
+  { id: 'ear', emoji: '🐰', title: '귀 팔랑', desc: '귀를 좌우로 팔랑팔랑 털다가 쫑긋 세우고 휙휙 돌려요. "푸루루~" "야하!"', when: '가끔, 쉬고 있을 때' },
 ]
 // 상호작용마다 쓰는 시트 동작. 시트에 있으면 '전용 그림', 없으면 기존 동작에 효과를 얹는다.
-const PLAY_ART = { pat: 'review', poke: 'fight', snack: 'eat', dance: 'dance', acorn: 'acorn', flee: 'dash', nap: 'nap', greet: 'greet' }
+const PLAY_ART = { pat: 'review', poke: 'fight', snack: 'eat', dance: 'dance', acorn: 'acorn', flee: 'dash', nap: 'nap', greet: 'greet', ear: 'ear' }
 function renderPlay() {
   const all = state.config.playAll
   const have = new Set((state.sprite && state.sprite.animations) || [])

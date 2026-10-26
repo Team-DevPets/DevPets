@@ -24,7 +24,7 @@ const SIZES = [
 ]
 const MOOD_LABEL = { idle: '쉬는 중', working: '작업 중', waiting: '확인 기다리는 중', done: '완료', error: '오류' }
 // 우사기 상호작용 (원작 속 우사기 행동에서 가져옴). 하나씩 켜고 끌 수 있고, playAll 로 한꺼번에 끈다.
-const PLAY_IDS = ['pat', 'poke', 'snack', 'dance', 'acorn', 'flee', 'nap', 'greet']
+const PLAY_IDS = ['pat', 'poke', 'snack', 'dance', 'acorn', 'flee', 'nap', 'greet', 'ear']
 const playOn = id => config.playAll !== false && !(config.play && config.play[id] === false)
 
 let win = null
@@ -82,15 +82,20 @@ const DEFAULT_SPRITE_OPTIONS = {
   // dance: 16~22번째 줄을 이어 붙인 잠옷 춤 — 주먹질 8번(16) → 웅크렸다 좌우로 기울며 흔들기(17~21) → 서서 멈춤 → 다리 꼬고 멈춤(22), 71프레임
   //   say: 그 프레임이 나올 때 우사기가 할 말 (renderer의 PLAY_LINES 키). 문자열이면 첫 프레임, { 순서: 키 }면 그 순서의 프레임.
   //   16번째 줄은 [준비, 주먹(1)] [당기기, 당기기, 주먹(4)] [당기기, 당기기, 주먹(7)]. 프레임 순서를 정해 주먹을 딱 8번 뻗게 한다.
+  // ear: 23~25번째 줄을 이어 붙인 "귀 팔랑" — 귀를 좌우로 팔랑팔랑(23,24) → 귀를 쫑긋 세우고 휙휙(25), 21프레임
+  //   원본 그림 두 장을 한 동작으로 이었다. 중간에 크기가 튀지 않게 둘 다 같은 배율로 붙였다 (add_rows.py --scale 0.5603).
   // 다른 상호작용 그림(먹기 eat · 도토리 acorn · 낮잠 nap · 반기기 greet · 잰걸음 dash)은 줄을 붙인 뒤
   // pets/sprite.json 의 rows 로 줄 번호를 정해 준다 (예: { "rows": { "eat": 22, "nap": [23, 24] } }, 0부터 셈). 없는 줄을 가리키면 그 동작은 효과로 대신한다.
   rows: { idle: 0, walk: 1, walkLeft: 2, dragging: 3, done: 4, error: 5, waiting: 6, working: 7, review: 8, fight: [11, 12, 13, 14], dance: [
     { row: 15, frames: DANCE_FIST_ORDER, say: 'danceFist' },
     { row: 16, say: 'danceSway' }, 17, 18, 19, 20,
     { row: 21, frames: DANCE_LEGS_ORDER, say: { [DANCE_LEGS_ORDER.indexOf(5)]: 'danceCross' } }, // 다리를 꼬기 시작할 때 "쁘릿!"
+  ], ear: [
+    { row: 22, say: 'earFlap' }, 23,
+    { row: 24, say: 'earPerk' }, // 귀를 쫑긋 세울 때 한 번 더
   ] },
   fps: 6,
-  fpsByMood: { walk: 10, done: 8, fight: 10, eat: 6, dance: 10, acorn: 6, nap: 3, greet: 8, dash: 12 },
+  fpsByMood: { walk: 10, done: 8, fight: 10, eat: 6, dance: 10, acorn: 6, nap: 3, greet: 8, dash: 12, ear: 10 },
   height: 120,
 }
 const MOOD_ORDER = ['idle', 'working', 'waiting', 'done', 'error', 'walk']

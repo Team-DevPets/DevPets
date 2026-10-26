@@ -3,12 +3,13 @@
 Windows 바탕화면 위에 떠 있는 우사기(치이카와) 펫. Claude 앱 · ChatGPT 앱 · Claude Code · Codex의 작업 상태를 보여 주고, 클릭·간식·춤 같은 상호작용을 한다.
 Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 묶지 않음). 소스를 고치면 바로 실행본이 바뀐다.
 
-## 지금 상태 (2026-10-23)
+## 지금 상태 (2026-10-26)
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.17.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` · `v0.4.17`.
-- 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로). 펫의 동작·모습은 0.4.16과 같다.
+- **버전 0.4.18.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` · `v0.4.17`.
+- 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄 21프레임, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
+- 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
 - **배포본 ZIP을 만들어 뒀다**: `release\UsagiPet-0.4.17-win32-x64.zip` (118MB). GitHub Releases 업로드는 민준이 직접 할 예정이라 **아직 안 올라갔다.**
 - 디스크에 `resources\app\node_modules`(276MB)와 `release`(397MB)가 있다. 둘 다 깃 바깥이라 지워도 되고, 지우면 다시 `npm install`해야 F5 실행·배포본 만들기가 된다.
 - **main은 GitHub에서 보호되어 있다.** 직접 푸시는 거부되므로 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)).
@@ -29,13 +30,13 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
   UsagiPet.exe                   실행 파일 (Electron)
   CLAUDE.md                      이 문서
   패치노트.md · README.md        사용자용 패치노트 · 사용 설명서 (resources\app 안에 같은 파일이 하나씩 더 있음 — 둘 다 같게 유지)
-  pets\sprite.png                지금 쓰는 펫 시트 (1536×4576, 22줄). 실행 중에 바꿔도 바로 적용
-  pets\sprite-before-*.png       시트를 바꿀 때마다 남긴 백업 (fight · dance · legs)
+  pets\sprite.png                지금 쓰는 펫 시트 (1536×5200, 25줄). 실행 중에 바꿔도 바로 적용
+  pets\sprite-before-*.png       시트를 바꿀 때마다 남긴 백업 (fight · dance · legs · ear)
   pets\sprite.json               (없음) 시트 줄 배정을 덮어쓰고 싶을 때만
   logs\app-watch.log             감지·상태·오류 기록 — 문제를 볼 때 가장 먼저 확인
   hooks\                         Claude Code·Codex hooks (install.js, pet-status.js) — npm run hooks 로 설치
   dev\sprite-tools\add_rows.py   새 동작 그림을 시트에 붙이는 도구 (Python)
-  dev\sprite-sources\            지금 시트의 춤 원본 그림 3장
+  dev\sprite-sources\            지금 시트의 춤 원본 3장 · 귀 팔랑 원본 2장
   resources\app\                 ★ 앱 소스
     package.json                 버전 (지금 0.4.17), npm test · npm run package:win
     main.js                      메인 프로세스: 창·시트 인식·드래그·산책·상태 감지·알림·트레이·설정 창
@@ -97,6 +98,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 | 15 | 춤 ① 주먹질 (잠옷) | 8 |
 | 16–20 | 춤 ② 웅크렸다 좌우로 흔들기 | 5×5 |
 | 21 | 춤 ③ 서 있다가 다리 꼬기 | 8 |
+| 22 · 23 · 24 | ear 귀 팔랑 (22·23 좌우로 팔랑 → 24 쫑긋 세우고 휙휙) | 7 × 3 = 21 |
 
 ### 줄 배정 문법 (`DEFAULT_SPRITE_OPTIONS.rows` 또는 `pets\sprite.json`의 `rows`)
 
@@ -105,7 +107,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
   `say`는 그 프레임이 나올 때 말할 대사 키 (renderer `PLAY_LINES`). 문자열이면 첫 프레임, `{ 순서: 키 }`면 그 순서.
 - 가리킨 줄이나 프레임이 하나라도 없으면 그 동작은 쓰지 않고, 상호작용은 "효과로 대신"한다.
 - `fpsByMood`를 sprite.json에 적으면 기본값 전체가 바뀐다 (fight 10, dance 10 등 함께 적어야 함).
-- 상호작용 전용 그림 이름: `eat`(간식) · `dance` · `acorn`(도토리) · `nap`(낮잠) · `greet`(반기기) · `dash`(잰걸음, 오른쪽 — 왼쪽은 뒤집어 그림). 지금은 **dance만** 시트에 있다.
+- 상호작용 전용 그림 이름: `eat`(간식) · `dance` · `ear`(귀 팔랑) · `acorn`(도토리) · `nap`(낮잠) · `greet`(반기기) · `dash`(잰걸음, 오른쪽 — 왼쪽은 뒤집어 그림). 지금은 **dance와 ear만** 시트에 있다.
 
 ### 지금 춤 (0.4.16, 10fps, 71프레임 ≈ 7.1초)
 
@@ -124,12 +126,14 @@ python dev\sprite-tools\add_rows.py 그림.png --name eat --dry-run   # 미리�
 python dev\sprite-tools\add_rows.py 그림.png --name eat              # 백업 후 시트에 붙이고 새 줄 번호 출력
 ```
 - 격자 그림은 `--per-row 5`, 크기 기준이 될 서 있는 프레임은 `--stand 0,1,2`, 프레임이 붙어 잘리면 `--col-gap`을 줄인다.
+- **크기 맞추기**: 기본은 서 있는 키 153px이지만, 머리가 큰 그림은 같은 키라도 훨씬 커 보인다. `--area 9500`(기존 쉬기 그림의 보이는 넓이)으로 맞추는 쪽이 어울린다. **한 동작을 그림 여러 장으로 나눠 붙일 때는 `--scale`로 모두 같은 배율**을 줘야 중간에 크기가 튀지 않는다 (귀 팔랑은 둘 다 `--scale 0.5603`).
+- 귀를 위·옆으로 뻗어 192×208 칸을 넘으면 `--fit`을 준다 (칸 너비 = 시트너비÷프레임수, 칸 높이는 가장 큰 프레임에 맞춤). 프레임 사이가 10px 미만이면 멈춘다 — main.js가 6px 이내로 붙은 그림을 한 프레임으로 합치기 때문.
 - 붙인 뒤 `DEFAULT_SPRITE_OPTIONS.rows`에 연결하고, 필요하면 `fpsByMood`와 renderer `PLAY_LINES` 대사를 추가한다.
 - 미리보기 그림을 꼭 열어 보고, 프레임 수·순서·크기가 맞는지 확인한다.
 
 ## 상호작용 (renderer\index.html "우사기 상호작용")
 
-`pat` 쓰다듬기 · `poke` 2.5초 안에 세 번 찌르면 fight · `snack` 간식(우클릭 메뉴 / 가끔) · `dance` 갑자기 춤추기 · `acorn` 도토리 닦기 · `flee` 근처에서 마우스를 휘저으면 도망(메인이 감지·이동) · `nap` 3분 미사용 시 도라야키 낮잠 · `greet` 2분 넘게 비웠다 돌아오면 반기기.
+`pat` 쓰다듬기 · `poke` 2.5초 안에 세 번 찌르면 fight · `snack` 간식(우클릭 메뉴 / 가끔) · `dance` 갑자기 춤추기 · `ear` 귀 팔랑(가끔, 전용 그림이 있을 때만) · `acorn` 도토리 닦기 · `flee` 근처에서 마우스를 휘저으면 도망(메인이 감지·이동) · `nap` 3분 미사용 시 도라야키 낮잠 · `greet` 2분 넘게 비웠다 돌아오면 반기기.
 - 켜고 끄기: `config.play.<id>`, 전체 `config.playAll`. 설정 창 **상호작용** 페이지 (`PLAYS`, `PLAY_ART` in settings.js).
 - 엔진: `play`(지금 하는 행동), `later()` 타이머(끝나면 `endPlay`로 정리), `react(name)` 시트 동작 재생, `loopReact`, `sayPlay(key, extra, ms)`.
 - 상호작용·낮잠 중에는 메인이 산책을 멈춘다 (`pet:playing`, `pet:napping` → `setPetBusy`). `calm()` = idle 또는 done 일 때만 혼자 시작.

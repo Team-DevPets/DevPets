@@ -923,6 +923,7 @@
   //   flee  도망가기        근처에서 마우스를 마구 흔들면 "우라!" 하고 잰걸음으로 달아난다 (메인 프로세스가 감지·이동)
   //   nap   도라야키 낮잠   3분 동안 컴퓨터를 안 쓰면 커다란 도라야키를 이불 삼아 잔다
   //   greet 돌아오면 반기기  2분 넘게 자리를 비웠다 돌아오면 "야하!"
+  //   ear   귀 팔랑          귀를 좌우로 팔랑팔랑하다가 쫑긋 세우고 휙휙 (시트 23~25번째 줄, 21프레임)
   const playOn = id => config.playAll !== false && !(config.play && config.play[id] === false)
   const PLAY_LINES = {
     snack: [['우마!', '맛있다!'], ['우마우마~', '정말 맛있어!'], ['우~라~!', '엄청 맛있잖아!']],
@@ -936,6 +937,8 @@
     napStart: [['푸루루…', '졸려… 도라야키 이불 덮고 잘래']],
     wake: [['야하~!', '잘 잤다! 다시 왔구나']],
     greet: [['야하!', '다시 왔구나! 반가워'], ['야하~!', '어서 와!']],
+    earFlap: [['푸루루~', '귀가 간질간질, 팔랑팔랑'], ['후와~', '귀 좀 털어 볼까~']],
+    earPerk: [['야하!', '귀 쫑긋! 뭔가 들렸나?']],
   }
   const SNACKS = [['🍮', '푸딩'], ['🍙', '주먹밥'], ['🍜', '라멘'], ['🍡', '경단'], ['🥞', '팬케이크'], ['🍩', '도넛']]
   let play = null // 지금 하고 있는 행동 이름 (한 번에 하나만)
@@ -1060,6 +1063,21 @@
     later(end, endPlay)
   }
 
+  // 귀 팔랑 (시트 23~25번째 줄, 21프레임). 한 번만 재생하고, 그림이 없으면 하지 않는다.
+  function doEar() {
+    const art = anim('ear')
+    if (!art) return
+    endPlay(); play = 'ear'
+    const one = animMs('ear')
+    react('ear')
+    // 프레임마다 정해 둔 대사(say)를 그 프레임이 나오는 때에 말한다 (팔랑 → 쫑긋).
+    const at = i => Math.round(i / (art.fps || 6) * 1000)
+    const cues = art.frames.map((f, i) => [i, f.say]).filter(([, key]) => PLAY_LINES[key])
+    cues.forEach(([i, key], k) => later(at(i), () => sayPlay(key, '',
+      k + 1 < cues.length ? at(cues[k + 1][0]) - at(i) + 200 : Math.max(1600, one - at(i) + 200))))
+    later(one + 150, endPlay)
+  }
+
   function doAcorn() {
     endPlay(); play = 'acorn'
     const box = petBox()
@@ -1163,6 +1181,7 @@
     if (id === 'snack') doSnack()
     else if (id === 'dance') doDance()
     else if (id === 'acorn') doAcorn()
+    else if (id === 'ear') doEar()
     else if (id === 'poke') doPoke()
     else if (id === 'flee') doFlee()
     else if (id === 'nap') { if (napped) wake(); else startNap() }
@@ -1200,7 +1219,8 @@
   // 혼자 하는 행동: 45초마다 쉬고 있으면 약 12% 확률 (평균 6분에 한 번)
   setInterval(() => {
     if (!free() || $('bubble').classList.contains('show') || Math.random() > 0.12) return
-    const choices = ['dance', 'acorn', 'snack'].filter(playOn)
+    // 귀 팔랑은 전용 그림이 있을 때만 (예전 시트에는 그 줄이 없다)
+    const choices = ['dance', 'acorn', 'snack', 'ear'].filter(playOn).filter(id => id !== 'ear' || anim('ear'))
     if (choices.length) doPlay(pick(choices))
   }, 45000)
 

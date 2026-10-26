@@ -112,9 +112,23 @@ def main():
     ap.add_argument('--sheet', default='pets/sprite.png')
     ap.add_argument('--per-row', type=int, default=8, help='시트 한 줄에 넣을 프레임 수 (최대 8)')
     ap.add_argument('--stand', default='', help='크기 기준으로 쓸 "서 있는" 프레임 번호 (쉼표). 비우면 높이 중앙값')
+    ap.add_argument('--height', type=int, default=STAND_H,
+                    help=f'맞출 서 있는 키 (기본 {STAND_H}). 머리가 큰 그림은 같은 키라도 훨씬 커 보이니 '
+                         '--area 로 넓이를 맞추는 쪽이 낫다')
+    ap.add_argument('--area', type=int, default=0,
+                    help='--height 대신 보이는 넓이(px²)를 맞춘다. 기존 쉬기 그림은 약 9500')
+    ap.add_argument('--scale', type=float, default=0,
+                    help='배율을 직접 준다. 같은 그림체로 그린 원본을 여러 번 나눠 붙일 때 '
+                         '(한 동작이 여러 그림에 걸칠 때) 반드시 같은 값을 써야 크기가 튀지 않는다')
     ap.add_argument('--expect', type=int, default=0, help='기대하는 프레임 수 (다르면 멈춤)')
     ap.add_argument('--col-gap', type=int, default=8, help='프레임 사이 최소 빈 칸(px). 붙어 있으면 줄이기')
     ap.add_argument('--row-gap', type=int, default=25)
+    ap.add_argument('--fit', action='store_true',
+                    help='귀를 위·옆으로 뻗는 동작처럼 192x208 칸을 넘는 그림용. 칸 너비를 시트너비/프레임수로, '
+                         '칸 높이를 가장 큰 프레임에 맞춰 넓힌다 (바닥선은 칸 아래에서 12px 위로 유지)')
+    ap.add_argument('--cell-w', type=int, default=0, help='칸 너비를 직접 지정 (기본 192, --fit 이면 자동)')
+    ap.add_argument('--cell-h', type=int, default=0, help='칸 높이를 직접 지정 (기본 208, --fit 이면 자동)')
+    ap.add_argument('--base', type=int, default=0, help='칸 위에서 바닥선까지 거리 (기본 196)')
     ap.add_argument('--dry-run', action='store_true', help='시트를 바꾸지 않고 미리보기만 만든다')
     args = ap.parse_args()
 
@@ -131,30 +145,54 @@ def main():
         sys.exit('프레임을 찾지 못했습니다 (투명 배경인지 확인).')
 
     stand = [int(x) for x in args.stand.split(',') if x.strip()]
-    ref = np.median([frames[i].height for i in stand]) if stand else np.median([f.height for f in frames])
-    scale = STAND_H / ref
-    print(f'배율 {scale:.4f} (기준 높이 {ref:.0f}px → {STAND_H}px)')
+    pick = [frames[i] for i in stand] if stand else frames
+    if args.scale:
+        scale = args.scale
+        print(f'배율 {scale:.4f} (직접 지정, 서 있는 키 {np.median([f.height for f in pick]) * scale:.0f}px)')
+    elif args.area:
+        seen = np.median([(np.array(f)[..., 3] >= 24).sum() for f in pick])
+        scale = (args.area / seen) ** 0.5
+        print(f'배율 {scale:.4f} (기준 넓이 {seen:.0f}px² → {args.area}px², 서 있는 키 '
+              f'{np.median([f.height for f in pick]) * scale:.0f}px)')
+    else:
+        ref = np.median([f.height for f in pick])
+        scale = args.height / ref
+        print(f'배율 {scale:.4f} (기준 높이 {ref:.0f}px → {args.height}px)')
 
     sheet = Image.open(args.sheet).convert('RGBA')
     SW, SH = sheet.size
     per = max(1, min(8, args.per_row))
-    groups = [frames[i:i + per] for i in range(0, len(frames), per)]
-    new = Image.new('RGBA', (SW, SH + len(groups) * CELL_H), (0, 0, 0, 0))
+    scaled = [f.resize((max(1, round(f.width * scale)), max(1, round(f.height * scale))), Image.LANCZOS) for f in frames]
+    groups = [scaled[i:i + per] for i in range(0, len(scaled), per)]
+
+    cell_w = args.cell_w or (SW // per if args.fit else CELL_W)
+    cell_h = args.cell_h or (max(CELL_H, max(g.height for g in scaled) + 16) if args.fit else CELL_H)
+    base = args.base or cell_h - (CELL_H - BASE)
+    if (cell_w, cell_h, base) != (CELL_W, CELL_H, BASE):
+        print(f'칸 {cell_w}x{cell_h}, 바닥선 {base} (기본 {CELL_W}x{CELL_H}, {BASE})')
+
+    new = Image.new('RGBA', (SW, SH + len(groups) * cell_h), (0, 0, 0, 0))
     new.paste(sheet, (0, 0))
     for r, group in enumerate(groups):
-        for i, f in enumerate(group):
-            g = f.resize((max(1, round(f.width * scale)), max(1, round(f.height * scale))), Image.LANCZOS)
-            x = round(96 + CELL_W * i - body_center(np.array(g)))
-            y = SH + r * CELL_H + BASE - g.height
-            if x < CELL_W * i + 2 or x + g.width > CELL_W * (i + 1) - 2 or y < SH + r * CELL_H + 4:
-                sys.exit(f'{r}줄 {i}번 프레임이 칸(192x208) 밖으로 나갑니다. --stand 로 배율을 다시 잡으세요.')
+        spans = []
+        for i, g in enumerate(group):
+            x = round(cell_w / 2 + cell_w * i - body_center(np.array(g)))
+            y = SH + r * cell_h + base - g.height
+            if x < cell_w * i + 2 or x + g.width > cell_w * (i + 1) - 2 or y < SH + r * cell_h + 4:
+                sys.exit(f'{r}줄 {i}번 프레임이 칸({cell_w}x{cell_h}) 밖으로 나갑니다. '
+                         '--fit 을 주거나 --per-row 를 줄이거나 --stand 로 배율을 다시 잡으세요.')
             new.alpha_composite(g, (x, y))
+            spans.append((x, x + g.width))
+        gaps = [spans[i + 1][0] - spans[i][1] for i in range(len(spans) - 1)]
+        if gaps and min(gaps) < 10:
+            sys.exit(f'{r}줄: 프레임 사이가 {min(gaps)}px 뿐입니다. main.js 는 6px 이내로 붙은 그림을 '
+                     '한 프레임으로 합치므로 10px 이상 떨어져야 합니다. --per-row 를 줄이세요.')
 
     first_new = count_rows(sheet)
 
     preview = f'dev/sprite-tools/preview-{args.name}.png'
     os.makedirs(os.path.dirname(preview), exist_ok=True)
-    crop = new.crop((0, max(0, SH - CELL_H), SW, new.height))
+    crop = new.crop((0, max(0, SH - cell_h), SW, new.height))
     bg = Image.new('RGBA', crop.size, (235, 235, 235, 255))
     bg.alpha_composite(crop)
     bg.save(preview)
