@@ -7,7 +7,8 @@ Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.19.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`에 0.4.19까지 올라가 있다. 태그 `v0.4.16` ~ `v0.4.19`.
+- **버전 0.4.20 — 아직 깃에 안 올렸다** (민준이 "PR 해줘"라고 하면 올린다). `main`에는 0.4.19까지, 태그 `v0.4.16` ~ `v0.4.19`.
+- 0.4.20에서 산책을 손봤다 — 열에 일곱은 잰걸음, 한 번에 300~600px.
 - 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.19에서 귀 팔랑을 49프레임(4.9초)으로 늘리고 대사를 "푸루 푸루~" · "푸루루루루루~!"로 바꿨다.
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
@@ -145,7 +146,11 @@ python dev\sprite-tools\add_rows.py 그림.png --name eat              # 백업 
 ## 산책
 
 - 8방향 자동 산책 (`walkRange`, `pickWalkDirection`: 가로 3 · 대각 2 · 세로 1 가중치, `moveAlong`). 설정 `walk2d`로 끄면 좌우만.
+- 한 번에 **300~600px**(`WALK_MIN_PX` · `WALK_MAX_PX`). 거리를 먼저 뽑고 걸음 수를 계산해서, 빠르든 느리든 가는 거리는 같다.
+- **열에 일곱(`FAST_WALK_CHANCE`)은 잰걸음** — 도망갈 때와 같은 `DASH_STEP`/`DASH_INTERVAL`(6px/22ms). 나머지는 `WALK_STEP`/`WALK_INTERVAL`(3px/40ms).
+- `pet:walk` 로 보내는 값: **±1 보통 걸음 · ±2 도망 · ±3 빠른 산책**. ±2는 잰걸음 전용 그림(`dash`)이 있으면 그걸 쓰고, **±3은 언제나 걷기 그림을 두 배 빠른 fps로** 그린다 (렌더러 `spriteAnim`의 `quick`). 산책은 걷는 모습이어야 해서 나눠 뒀다.
 - 걷기 그림은 좌우 두 가지뿐 — 위아래 전용 걷기 그림은 아직 없다.
+- 산책 확인은 쉽지 않다: 컴퓨터를 3분 안 쓰면 낮잠(`nap`)이 들어 산책이 멈춘다. 시험할 때는 config 의 `play.nap` 을 꺼야 한다.
 
 ## AI 상태 감지 (main.js)
 
