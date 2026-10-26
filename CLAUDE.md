@@ -7,7 +7,7 @@ Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.19 — 아직 깃에 안 올렸다.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main` (0.4.18까지), 태그 `v0.4.16` · `v0.4.17` · `v0.4.18`. 민준이 "PR 해줘"라고 하면 올린다.
+- **버전 0.4.19.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`에 0.4.19까지 올라가 있다. 태그 `v0.4.16` ~ `v0.4.19`.
 - 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.19에서 귀 팔랑을 49프레임(4.9초)으로 늘리고 대사를 "푸루 푸루~" · "푸루루루루루~!"로 바꿨다.
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
