@@ -7,7 +7,9 @@ Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.19.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`에 0.4.19까지 올라가 있다. 태그 `v0.4.16` ~ `v0.4.19`.
+- **버전 0.4.21.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` ~ `v0.4.21`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
+- 0.4.21에서 확인 대기(`waiting`, 6줄) 그림을 새 그림으로 바꾸고(`add_rows.py --replace`), 숨쉬기를 쉬기와 같은 속도로 늦추고, 오른쪽 아래 **상태 점을 없앴다**. AI 상태는 AI 링과 상태 카드만으로 보여 준다.
+- 0.4.20에서 산책을 손봤다 — 열에 일곱은 잰걸음, 한 번에 300~600px. Electron 은 45로 올라갔고(uzinkkk, #8) 설치본도 45로 다시 만들어 뒀다.
 - 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.19에서 귀 팔랑을 49프레임(4.9초)으로 늘리고 대사를 "푸루 푸루~" · "푸루루루루루~!"로 바꿨다.
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
@@ -34,12 +36,12 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
   CLAUDE.md                      이 문서
   패치노트.md · README.md        사용자용 패치노트 · 사용 설명서 (resources\app 안에 같은 파일이 하나씩 더 있음 — 둘 다 같게 유지)
   pets\sprite.png                지금 쓰는 펫 시트 (1536×5200, 25줄). 실행 중에 바꿔도 바로 적용
-  pets\sprite-before-*.png       시트를 바꿀 때마다 남긴 백업 (fight · dance · legs · ear)
+  pets\sprite-before-*.png       시트를 바꿀 때마다 남긴 백업 (fight · dance · legs · ear · waiting)
   pets\sprite.json               (없음) 시트 줄 배정을 덮어쓰고 싶을 때만
   logs\app-watch.log             감지·상태·오류 기록 — 문제를 볼 때 가장 먼저 확인
   hooks\                         Claude Code·Codex hooks (install.js, pet-status.js) — npm run hooks 로 설치
   dev\sprite-tools\add_rows.py   새 동작 그림을 시트에 붙이는 도구 (Python)
-  dev\sprite-sources\            지금 시트의 춤 원본 3장 · 귀 팔랑 원본 2장
+  dev\sprite-sources\            지금 시트의 원본 그림 (춤 3장 · 귀 팔랑 2장 · 확인 대기 1장)
   resources\app\                 ★ 앱 소스
     package.json                 버전 (지금 0.4.17), npm test · npm run package:win
     main.js                      메인 프로세스: 창·시트 인식·드래그·산책·상태 감지·알림·트레이·설정 창
@@ -131,6 +133,7 @@ python dev\sprite-tools\add_rows.py 그림.png --name eat              # 백업 
 - 격자 그림은 `--per-row 5`, 크기 기준이 될 서 있는 프레임은 `--stand 0,1,2`, 프레임이 붙어 잘리면 `--col-gap`을 줄인다.
 - **크기 맞추기**: 기본은 서 있는 키 153px이지만, 머리가 큰 그림은 같은 키라도 훨씬 커 보인다. `--area 9500`(기존 쉬기 그림의 보이는 넓이)으로 맞추는 쪽이 어울린다. **한 동작을 그림 여러 장으로 나눠 붙일 때는 `--scale`로 모두 같은 배율**을 줘야 중간에 크기가 튀지 않는다 (귀 팔랑은 둘 다 `--scale 0.5603`).
 - 귀를 위·옆으로 뻗어 192×208 칸을 넘으면 `--fit`을 준다 (칸 너비 = 시트너비÷프레임수, 칸 높이는 가장 큰 프레임에 맞춤). 프레임 사이가 10px 미만이면 멈춘다 — main.js가 6px 이내로 붙은 그림을 한 프레임으로 합치기 때문.
+- **있는 줄을 바꿀 때는 `--replace N`** (0부터). 줄을 새로 붙이지 않고 그 줄만 바꾸므로 시트 높이·다른 줄 번호가 그대로고 main.js 도 고칠 게 없다. 한 줄짜리 그림만 받는다. 미리보기에 바로 위 줄이 같이 나와 크기를 견주어 볼 수 있다 (0.4.21의 waiting: `--replace 6 --per-row 6 --area 10800`).
 - 붙인 뒤 `DEFAULT_SPRITE_OPTIONS.rows`에 연결하고, 필요하면 `fpsByMood`와 renderer `PLAY_LINES` 대사를 추가한다.
 - 미리보기 그림을 꼭 열어 보고, 프레임 수·순서·크기가 맞는지 확인한다.
 
@@ -145,7 +148,11 @@ python dev\sprite-tools\add_rows.py 그림.png --name eat              # 백업 
 ## 산책
 
 - 8방향 자동 산책 (`walkRange`, `pickWalkDirection`: 가로 3 · 대각 2 · 세로 1 가중치, `moveAlong`). 설정 `walk2d`로 끄면 좌우만.
+- 한 번에 **300~600px**(`WALK_MIN_PX` · `WALK_MAX_PX`). 거리를 먼저 뽑고 걸음 수를 계산해서, 빠르든 느리든 가는 거리는 같다.
+- **열에 일곱(`FAST_WALK_CHANCE`)은 잰걸음** — 도망갈 때와 같은 `DASH_STEP`/`DASH_INTERVAL`(6px/22ms). 나머지는 `WALK_STEP`/`WALK_INTERVAL`(3px/40ms).
+- `pet:walk` 로 보내는 값: **±1 보통 걸음 · ±2 도망 · ±3 빠른 산책**. ±2는 잰걸음 전용 그림(`dash`)이 있으면 그걸 쓰고, **±3은 언제나 걷기 그림을 두 배 빠른 fps로** 그린다 (렌더러 `spriteAnim`의 `quick`). 산책은 걷는 모습이어야 해서 나눠 뒀다.
 - 걷기 그림은 좌우 두 가지뿐 — 위아래 전용 걷기 그림은 아직 없다.
+- 산책 확인은 쉽지 않다: 컴퓨터를 3분 안 쓰면 낮잠(`nap`)이 들어 산책이 멈춘다. 시험할 때는 config 의 `play.nap` 을 꺼야 한다.
 
 ## AI 상태 감지 (main.js)
 

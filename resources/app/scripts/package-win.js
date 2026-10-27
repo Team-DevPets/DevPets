@@ -54,7 +54,10 @@ try {
   stop('Electron 을 찾지 못했어요. resources/app 에서 npm install 을 먼저 실행하세요.')
 }
 const srcExe = path.join(electronDist, 'electron.exe')
-if (!fs.existsSync(srcExe)) stop(`Electron 실행 파일이 없어요: ${srcExe}\nnpm install 을 다시 실행하세요.`)
+// npm 11 부터는 설치 스크립트를 막아서, npm install 을 해도 Electron 본체(dist)를 안 받아 오는 경우가 있다.
+if (!fs.existsSync(srcExe)) stop(`Electron 실행 파일이 없어요: ${srcExe}\n` +
+  'resources/app 에서 다음을 실행해 Electron 본체를 받으세요:\n' +
+  '  node node_modules/electron/install.js')
 
 if (fs.existsSync(OUT)) {
   if (!force) stop(`출력 폴더가 이미 있어요: ${OUT}\n다른 곳으로 옮기거나, 지우고 다시 만들려면 npm run package:win -- --force 를 쓰세요.`)

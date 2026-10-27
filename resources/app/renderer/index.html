@@ -121,15 +121,6 @@
   #card .hint { margin-top: 6px; padding-top: 4px; border-top: 1px solid #EFE5D6; color: #78675C; font-size: 10px; text-align: center; }
   @media (prefers-reduced-motion: reduce) { .ai .ring { animation: none !important; } #card { transition: none; } }
   #bubble { z-index: 3; }
-  #badge {
-    z-index: 3;
-    position: absolute; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
-    border: 1.5px solid #FFFEFA; box-shadow: 0 1px 2px rgba(73,56,47,.25); display: none; pointer-events: none;
-  }
-  #badge.working { display: block; background: #A9781C; }
-  #badge.waiting { display: block; background: #B8475C; }
-  #badge.done    { display: block; background: #4F7A35; }
-  #badge.error   { display: block; background: #B4432E; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 
   /* ---- 우사기 상호작용 효과 (간식·춤·도토리·낮잠·화내기) ---- */
@@ -184,7 +175,6 @@
     </g>
   </svg>
   <canvas id="sprite" width="180" height="180"></canvas>
-  <div id="badge"></div>
   <div class="ai" id="ai-claude"><div class="ring"></div><div class="face"></div><div class="flag">!</div></div>
   <div class="ai" id="ai-gpt"><div class="ring"></div><div class="face"></div><div class="flag">!</div></div>
   <div id="card" role="status"></div>
@@ -274,17 +264,6 @@
   let wasNear = false
   let bubbleTimer = null
   let blinkTimer = null
-  let badgeMood = 'idle'
-  let badgeTimer = null
-  function setBadge(state) {
-    clearTimeout(badgeTimer)
-    badgeMood = state
-    renderBadge()
-    if (state === 'done') badgeTimer = setTimeout(() => {
-      badgeMood = 'idle'
-      renderBadge()
-    }, 3000)
-  }
   let roomAbove = Infinity
   let visiblePet = { top: 96, bottom: 186, right: 120 }
   function placeBubble() {
@@ -302,8 +281,6 @@
     }
     b.classList.toggle('below', below)
     b.style.top = (below ? visiblePet.bottom + 10 : visiblePet.top - height - 10) + 'px'
-    $('badge').style.left = (visiblePet.right - 10) + 'px'
-    $('badge').style.top = (visiblePet.bottom - 17) + 'px'
   }
 
   // ---- 상황별 눈/눈썹/입 ----
@@ -415,12 +392,16 @@
   let animName = '' // 지금 그리는 동작 이름 (잰걸음 그림을 왼쪽으로 뒤집을 때 쓴다)
   function spriteAnim() {
     const sp = config.sprite
+    // ±2 도망(잰걸음 전용 그림이 있으면 그걸로) · ±3 빠른 산책(언제나 걷기 그림을 두 배 빠르게)
     const dashing = Math.abs(walking) === 2
+    const quick = Math.abs(walking) === 3
     const name = drag ? 'dragging' : reaction || (napped && sp.animations.nap ? 'nap'
       : walking ? (dashing && sp.animations.dash ? 'dash' : walking < 0 && sp.animations.walkLeft ? 'walkLeft' : 'walk')
       : mood === 'done' ? 'idle' : mood)
     animName = name
-    if (sp.animations[name]) return { ...sp.animations[name], fps: name === 'idle' && config.calmMode ? 2 : dashing && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
+    // 쉬기와 확인 대기는 가만히 숨만 쉬는 그림이라 같은 느린 속도로 그린다 (차분한 모드면 2fps).
+    const calmPose = (name === 'idle' || name === 'waiting') && config.calmMode // 아래 calm() 과 헷갈리지 않게 다른 이름
+    if (sp.animations[name]) return { ...sp.animations[name], fps: calmPose ? 2 : (dashing || quick) && (name === 'walk' || name === 'walkLeft') ? sp.animations[name].fps * 2 : sp.animations[name].fps }
     if (name === 'walk' && sp.animations.idle) return sp.animations.idle
     // 남는 줄이 있으면 쉬는 중일 때 번갈아 보여준다
     if (name === 'idle' && sp.extras.length) return sp.extras[idleVariant % sp.extras.length]
@@ -508,7 +489,6 @@
       img.src = sp.url
       spriteImg = img
     } else restartSprite()
-    renderBadge()
     look()
   }
   setInterval(() => { idleVariant++ ; if (!config.calmMode && config.sprite && mood === 'idle' && !walking) restartSprite() }, 12000)
@@ -540,7 +520,6 @@
     $('mouth').setAttribute('d', mouth(mood))
     $('fx').innerHTML = fx(mood)
     $('pet').className.baseVal = walking ? (walking < 0 ? 'walk-left' : 'walk-right') : config.calmMode ? 'idle' : mood
-    renderBadge()
     look()
   }
 
@@ -690,7 +669,6 @@
   // 위치·크기·투명도는 매 프레임 목표값을 향해 부드럽게 따라가게 해서, 상태가 바뀌어도 아이콘이 순간이동하지 않는다.
   const AI_IDS = ['claude', 'gpt']
   const AI_FALLBACK = { claude: 'C', gpt: 'G' }
-  const PROVIDER_SOURCES = ['Claude 앱', 'Claude Code', 'ChatGPT 앱', 'Codex 앱', 'Codex']
   const STATE_LABEL = { working: '작업 중', waiting: '확인 대기', error: '오류', done: '완료' }
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   let providers = []
@@ -903,14 +881,6 @@
     if (!over && ($('card').classList.contains('show') || cardTimer)) hideCard()
   }
 
-  // 상태 점: AI 링이 이미 같은 정보를 보여 주면 겹쳐서 띄우지 않는다 (외부 status.json 상태일 때만 표시).
-  let badgeSources = []
-  function badgeCovered() {
-    return config.orbit !== false && badgeSources.length > 0 && badgeSources.every(source => PROVIDER_SOURCES.includes(source))
-  }
-  function renderBadge() {
-    $('badge').className = badgeMood === 'idle' || badgeCovered() ? '' : badgeMood
-  }
 
 
   // ---- 우사기 상호작용 ----
@@ -1234,7 +1204,6 @@
     }
     draw()
     updateAi()
-    renderBadge()
   })
   window.pet.onViewport(v => { roomAbove = v.roomAbove; placeBubble() })
   window.pet.onWalk(dir => {
@@ -1255,16 +1224,13 @@
   let lastDoneAt = 0
   window.pet.onStatus(status => {
     providers = Array.isArray(status.providers) ? status.providers : []
-    badgeSources = Array.isArray(status.sources) ? status.sources : []
     updateAi()
-    renderBadge()
     const prev = mood
     mood = status.mood
     // 완료는 연달아 와도(여러 세션) 새 완료마다 점프한다.
     const freshDone = mood === 'done' && status.at !== lastDoneAt
     if (mood === 'done') lastDoneAt = status.at
     const changed = mood !== prev || freshDone
-    if (changed) setBadge(mood)
     if (changed && mood !== 'idle') { if (napped) wake(false); if (play && play !== 'poke') endPlay() }
     if (changed && !drag) {
       react(mood === 'done' ? 'done' : null)
