@@ -30,8 +30,8 @@ function write(file, mood, detail, event) {
       if (Number(prev.at) > startedAt) return
     } catch {}
     fs.mkdirSync(DIR, { recursive: true })
-    // 전체 경로나 입력 내용을 저장하지 않고, 목록에서 구분할 최소 정보만 남긴다.
-    const text = JSON.stringify({ mood, detail: detail || '', at: startedAt, sessionId: String(event.session_id || '').slice(0, 80), project: projectName(event.cwd) })
+    // 재개할 프로젝트 경로는 로컬 상태 파일에만 저장하고 대화 내용은 저장하지 않는다.
+    const text = JSON.stringify({ mood, detail: detail || '', at: startedAt, sessionId: String(event.session_id || '').slice(0, 80), project: projectName(event.cwd), cwd: typeof event.cwd === 'string' ? event.cwd.slice(0, 32767) : '' })
     const tmp = `${file}.${process.pid}.tmp`
     try {
       fs.writeFileSync(tmp, text)

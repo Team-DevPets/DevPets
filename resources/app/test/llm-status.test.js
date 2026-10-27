@@ -65,3 +65,15 @@ test('시간 표시', () => {
   assert.equal(formatDuration(120_000), '2분')
   assert.equal(formatDuration(3_900_000), '1시간 5분')
 })
+test('CLI 승인·완료 알림에 재개 대상 경로와 세션을 보존한다', () => {
+  const tracker = createProviderTracker()
+  const entry = { source: 'Claude Code', mood: 'working', at: T0, sessionId: 's1', cwd: 'C:\\project' }
+  tracker.update([entry], T0)
+  const waiting = tracker.update([{ ...entry, mood: 'waiting', at: T0 + 1 }], T0 + 1).events[0]
+  assert.equal(waiting.cwd, entry.cwd)
+  assert.equal(waiting.sessionId, entry.sessionId)
+  tracker.update([{ ...entry, at: T0 + 2 }], T0 + 2)
+  const done = tracker.update([{ ...entry, mood: 'done', at: T0 + 3 }], T0 + 3).events[0]
+  assert.equal(done.cwd, entry.cwd)
+  assert.equal(done.sessionId, entry.sessionId)
+})

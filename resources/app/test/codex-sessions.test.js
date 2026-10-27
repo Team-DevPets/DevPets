@@ -121,3 +121,11 @@ test('기록 폴더가 없어도 오류 없이 비어 있다', () => {
   assert.deepStrictEqual(w.entries(), [])
   assert.strictEqual(w.info().rootFound, false)
 })
+test('CLI 기록은 앱과 구분하고 재개할 프로젝트 경로를 보존한다', () => {
+  const { day, w } = setup()
+  const file = path.join(day, 'rollout-cli.jsonl')
+  write(file, [meta({ source: 'cli', originator: 'codex_cli_rs', cwd: 'C:\\project' }), started('2026-10-22T03:00:01.000Z', 'u1')])
+  w.scan()
+  assert.equal(w.entries()[0].source, 'Codex')
+  assert.equal(w.entries()[0].cwd, 'C:\\project')
+})

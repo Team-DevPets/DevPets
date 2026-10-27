@@ -250,7 +250,7 @@ function renderHome(now) {
     const project = task.project || '프로젝트 미확인'
     const session = task.sessionId ? `세션 ${task.sessionId.slice(0, 8)}` : (task.source.includes('앱') ? '앱 단위 감지' : '세션 구분 정보 없음')
     const provider = task.provider === 'gpt' ? 'gpt' : task.provider === 'claude' ? 'claude' : ''
-    const action = provider ? `<button class="btn btn-quiet btn-sm" data-act="focus" data-arg="${provider}">앱 열기</button>` : ''
+    const action = provider ? `<button class="btn btn-quiet btn-sm" data-act="focusTask" data-arg="${esc(task.id)}">${task.navigation === 'session' ? '해당 채팅 열기' : task.navigation === 'resume' ? '터미널에서 재개' : '앱 열기'}</button>` : ''
     return `<div class="row">
       <div class="row-text"><span class="row-title">${esc(project)} · ${esc(task.source)}</span><span class="row-desc">${esc(MOOD_LABEL[task.state] || task.state)} · ${esc(task.detail || session)} · ${esc(session)}</span></div>
       ${pill(task.state, MOOD_LABEL[task.state] || task.state)}${action}
@@ -298,7 +298,11 @@ function renderHome(now) {
     <section class="card" aria-labelledby="session-tasks">
       <div class="section-head"><h2 class="h2" id="session-tasks">프로젝트 · 세션별 작업</h2><span class="sub">${tasks.length}개 · 확인이 필요한 작업부터 표시</span></div>
       ${tasks.length ? `<div class="rows">${taskRows}</div>` : '<p class="note">진행 중인 작업이 없어요. Codex 작업 기록이나 Claude Code·Codex hooks가 연결되면 프로젝트와 세션이 여기에 표시돼요.</p>'}
-      <p class="note">앱 화면 감지는 세션을 구분할 수 없어 앱 단위로 표시해요. Codex 기록과 hooks는 프로젝트 이름·세션 식별자를 보여 줍니다. 알림을 눌러도 앱까지만 열리고 특정 세션으로 바로 이동하지는 않아요.</p>
+      <p class="note">Codex 앱은 해당 채팅을 열고, CLI는 새 터미널에서 기록을 재개해요. 기존 터미널의 승인 화면으로 이동하는 기능은 아니에요. ID·프로젝트 경로가 없는 기록과 화면 감지는 앱만 열어요.</p>
+      <label for="claude-chat-link">Claude 채팅 링크로 열기</label>
+      <div class="btns"><input id="claude-chat-link" value="${esc(ui.claudeChatLink || '')}" type="url" placeholder="https://claude.ai/chat/…" aria-label="Claude 채팅 링크"><button class="btn btn-secondary" data-act="openClaudeChat">해당 채팅 열기</button></div>
+      <p class="note">Claude 화면 감지에서는 채팅 ID를 알 수 없어, 대화 링크를 직접 넣어야 해요.</p>
+      ${ui.navigationMsg ? `<p class="note" role="status">${esc(ui.navigationMsg)}</p>` : ''}
     </section>
 
     <div class="cols" style="align-items:flex-start">
@@ -855,6 +859,9 @@ function navigate(next) {
   render()
 }
 
+document.addEventListener('input', event => {
+  if (event.target.id === 'claude-chat-link') ui.claudeChatLink = event.target.value
+})
 document.addEventListener('click', async event => {
   const el = event.target.closest('button')
   if (!el || el.disabled || !state) return
@@ -905,6 +912,18 @@ document.addEventListener('click', async event => {
   } else if (act === 'refreshConnections') {
     const refreshed = await api.action('refreshConnections')
     ui.connectionMsg = refreshed ? '화면 감지와 Codex 기록 연결을 다시 시작했어요.' : '연결을 다시 확인하지 못했어요.'
+    render()
+  } else if (act === 'openClaudeChat') {
+    const result = await api.action('openClaudeChat', document.getElementById('claude-chat-link').value)
+    ui.navigationMsg = result === 'session' ? 'Claude 채팅으로 이동을 요청했어요.' : result === 'app' ? '링크를 열지 못해 Claude 앱을 열었어요.' : 'https://claude.ai/chat/채팅ID 형식의 링크를 넣어 주세요.'
+    render()
+  } else if (act === 'focusTask') {
+    const task = ((state.status && state.status.tasks) || []).find(t => t.id === el.dataset.arg)
+    const result = await api.action('focusTask', el.dataset.arg)
+    ui.navigationMsg = result === 'resume' ? '새 터미널을 열었어요. 재개 결과나 오류는 터미널에서 확인해 주세요.'
+      : result === 'session' ? '해당 채팅으로 이동을 요청했어요.'
+      : result === 'app' ? (task && task.navigation === 'session' ? '채팅 링크를 열지 못해 앱을 열었어요.' : '앱을 열었어요. 이 작업은 특정 세션 이동을 지원하지 않아요.')
+      : '작업이 목록에서 사라졌거나 앱을 열지 못했어요.'
     render()
   } else if (act === 'focus') {
     await api.action('focus', el.dataset.arg)

@@ -61,6 +61,7 @@ function providerState(entries, providerId, now) {
       source: top.source,
       project: top.project || '',
       sessionId: top.sessionId || '',
+      cwd: top.cwd || '',
       since: top.since || top.at,
       duration: top.duration || 0,
       sources: [...new Set(list.map(e => e.source))],
@@ -91,10 +92,10 @@ function createProviderTracker() {
           if (busy(cur.state) && !busy(before.state)) jobStart = now
         }
         if (cur.state === 'done' && (before.state === 'working' || (before.state === 'done' && newSession))) {
-          events.push({ type: 'done', provider: p.id, label: p.label, source: cur.source || before.source, project: cur.project || before.project, sessionId: cur.sessionId || before.sessionId, duration: cur.duration || now - (jobStart || cur.since || before.since) })
+          events.push({ type: 'done', provider: p.id, label: p.label, source: cur.source || before.source, project: cur.project || before.project, sessionId: cur.sessionId || before.sessionId, cwd: cur.cwd || (cur.sessionId === before.sessionId ? before.cwd : ''), duration: cur.duration || now - (jobStart || cur.since || before.since) })
         }
         if ((cur.state === 'waiting' || cur.state === 'error') && (cur.state !== before.state || newSession)) {
-          events.push({ type: cur.state, provider: p.id, label: p.label, source: cur.source, project: cur.project, sessionId: cur.sessionId, detail: cur.detail })
+          events.push({ type: cur.state, provider: p.id, label: p.label, source: cur.source, project: cur.project, sessionId: cur.sessionId, cwd: cur.cwd, detail: cur.detail })
         }
         prev[p.id] = {
           state: cur.state,
@@ -102,6 +103,7 @@ function createProviderTracker() {
           source: cur.state === 'idle' ? '' : (cur.source || before.source),
           project: cur.state === 'idle' ? '' : (cur.project || before.project),
           sessionId: cur.state === 'idle' ? '' : (cur.sessionId || before.sessionId),
+          cwd: cur.cwd || '',
           jobStart: cur.state === 'idle' ? 0 : jobStart,
         }
         if (cur.state !== 'idle') {

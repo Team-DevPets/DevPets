@@ -5,6 +5,7 @@ const { spawn, execFile } = require('child_process')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const { sessionUrl, openTarget, navigationMode, resumeScript, claudeChatTarget } = require('./session-navigation')
 
 const WINDOW_WIDTH = 180
 const BASE_WINDOW_HEIGHT = 340 // 기본 크기(90px)일 때의 창 높이. 펫 위쪽은 말풍선·AI 상태 카드 자리. 펫이 커지면 위쪽으로 늘어난다.
@@ -362,6 +363,7 @@ function readStatusFile(file, source = '') {
       eventAt: Number(raw.at) || 0,
       source,
       sessionId: typeof raw.sessionId === 'string' ? raw.sessionId.slice(0, 80) : fallbackId,
+      cwd: typeof raw.cwd === 'string' ? raw.cwd.slice(0, 32767) : '',
       project: typeof raw.project === 'string' ? raw.project.slice(0, 80) : '',
     }
   } catch {
@@ -437,7 +439,8 @@ function collectStatus(now = Date.now()) {
         since: entry.since || entry.at,
         project: entry.project || '',
         sessionId: entry.sessionId || '',
-        navigation: provider === 'other' ? 'unsupported' : 'app',
+        cwd: entry.cwd || '',
+        navigation: navigationMode({ ...entry, provider }),
       })
     }
   }
@@ -495,6 +498,7 @@ const APP_OF_PROVIDER = { claude: 'claude', gpt: 'chatgpt' }
 const SOURCE_SURFACE = { 'Claude 앱': 'app', 'ChatGPT 앱': 'app', 'Codex 앱': 'app', 'Claude Code': 'cli', Codex: 'cli' }
 const pendingNotice = {}
 let balloonProvider = null
+let balloonTarget = null
 const noticeHistory = new Map()
 let notificationMuteTimer = null
 
@@ -573,9 +577,10 @@ function ensureAppIdentity() {
   }
 }
 
-function notifyBalloon(provider, title, content) {
+function notifyBalloon(provider, title, content, options = {}) {
   if (!tray || tray.isDestroyed()) return
   balloonProvider = provider
+  balloonTarget = { provider, source: options.source, sessionId: options.sessionId, cwd: options.cwd }
   const icon = llmIconImages[provider]
   try {
     try { tray.removeBalloon() } catch {}
@@ -588,17 +593,18 @@ function notifyBalloon(provider, title, content) {
 function notify(provider, title, content, options = {}) {
   if (!notificationAllowed(options.type) || process.platform !== 'win32' || noticeIsDuplicate(provider, options)) return false
   watchLog(`notify [${provider}] ${title} — ${content}`)
-  if (!Notification.isSupported()) { notifyBalloon(provider, title, content); return true }
+  const target = { provider, source: options.source, sessionId: options.sessionId, cwd: options.cwd }
+  if (!Notification.isSupported()) { notifyBalloon(provider, title, content, target); return true }
   try {
     const notice = new Notification({ title, body: content, ...(llmIconImages[provider] ? { icon: llmIconImages[provider] } : {}) })
     notice.on('show', () => watchLog(`toast shown [${provider}]`))
     notice.on('click', () => {
       watchLog(`toast clicked [${provider}]`)
-      focusProvider(provider)
+      focusTarget(target)
     })
     notice.on('failed', (_, error) => {
       watchLog(`toast failed [${provider}] ${error} — 트레이 풍선으로 대신 보냄`)
-      notifyBalloon(provider, title, content)
+      notifyBalloon(provider, title, content, target)
     })
     notice.show()
     recentNotices.push(notice)
@@ -606,7 +612,7 @@ function notify(provider, title, content, options = {}) {
     return true
   } catch (error) {
     watchLog(`toast error ${error.message} — 트레이 풍선으로 대신 보냄`)
-    notifyBalloon(provider, title, content)
+    notifyBalloon(provider, title, content, target)
     return true
   }
 }
@@ -619,7 +625,7 @@ function handleProviderEvent(event) {
     if (event.duration < (surface === 'app' ? 15000 : 60000)) return
     const project = event.project ? `${event.project} · ` : ''
     const session = event.sessionId ? ` · 세션 ${event.sessionId.slice(0, 8)}` : ''
-    notify(event.provider, `${project}${event.source || event.label} 작업 완료${session}`, `${llmStatus.formatDuration(event.duration)} 걸렸어요. 눌러서 앱을 열어요. 특정 세션으로 바로 이동하지는 않아요.`, { ...event, type: 'done' })
+    notify(event.provider, `${project}${event.source || event.label} 작업 완료${session}`, `${llmStatus.formatDuration(event.duration)} 걸렸어요. ${navigationHint(event)}`, { ...event, type: 'done' })
     return
   }
   // 확인 대기 · 오류는 잠깐 기다렸다가 그대로면 알린다.
@@ -631,7 +637,7 @@ function handleProviderEvent(event) {
     const session = event.sessionId ? ` · 세션 ${event.sessionId.slice(0, 8)}` : ''
     const title = event.type === 'waiting' ? `${project}${event.source || event.label}가 확인을 기다려요${session}` : `${project}${event.source || event.label} 오류${session}`
     const detail = event.detail || (event.type === 'waiting' ? '권한 확인이 필요해요' : '응답이 중단됐어요')
-    notify(event.provider, title, `${detail} · 눌러서 앱을 열어요. 특정 세션으로 바로 이동하지는 않아요.`, { ...event, type: event.type })
+    notify(event.provider, title, `${detail} · ${navigationHint(event)}`, { ...event, type: event.type })
   }, event.type === 'waiting' ? 15000 : 3000)
 }
 
@@ -680,6 +686,28 @@ function loadStartApps(force = false) {
 
 // 그 AI의 데스크톱 앱을 앞으로 가져온다. 이미 켜져 있으면 앱이 자기 창을 앞으로 띄운다 (한 번만 실행되는 앱).
 // 순서: 시작 메뉴 앱 ID → 설치 폴더에서 계산한 스토어 앱 ID → 실행 파일 직접 실행. 웹 Claude는 앱을 전혀 못 찾을 때만 연다.
+function navigationHint(target) {
+  return navigationMode(target) === 'resume' ? '눌러서 새 터미널에서 해당 세션을 재개해요.' : sessionUrl(target) ? '눌러서 해당 채팅으로 이동해요.' : '눌러서 앱을 열어요. 해당 세션으로 바로 이동은 지원하지 않아요.'
+}
+
+async function focusTarget(target) {
+  const result = await openTarget(target, {
+    openExternal: url => shell.openExternal(url),
+    openProvider: focusProvider,
+    openTerminal: spec => new Promise(resolve => {
+      if (process.platform !== 'win32' || !fs.existsSync(spec.cwd) || !fs.statSync(spec.cwd).isDirectory()) return resolve(false)
+      const encoded = Buffer.from(resumeScript(spec), 'utf16le').toString('base64')
+      // User explicitly requested an interactive terminal via the resume button.
+      const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NoExit', '-EncodedCommand', encoded], { cwd: spec.cwd, detached: true, stdio: 'ignore', windowsHide: false })
+      child.once('error', () => resolve(false))
+      child.once('spawn', () => { child.unref(); resolve(true) })
+    }),
+    log: watchLog,
+  })
+  watchLog(`focus target [${target.provider}] session=${target.sessionId || '-'} result=${result}`)
+  return result
+}
+
 async function focusProvider(provider) {
   if (process.platform !== 'win32') return provider === 'claude' ? (openClaude(), true) : false
   const exe = llmExeCandidates(provider)[0] || ''
@@ -1936,6 +1964,14 @@ const SETTINGS_ACTIONS = {
     return true
   },
   focus: ([provider]) => (llmStatus.PROVIDERS.some(p => p.id === provider) ? focusProvider(provider) : false),
+  openClaudeChat: ([url]) => {
+    const target = claudeChatTarget(url)
+    return target ? focusTarget(target) : false
+  },
+  focusTask: ([id]) => {
+    const task = (currentStatus.tasks || []).find(t => t.id === id)
+    return task ? focusTarget(task) : false
+  },
   open: ([target]) => { openPath(target); return true },
   nodeDownload: () => { shell.openExternal('https://nodejs.org/ko/download'); return true },
   testNotify: ([kind]) => testNotify(kind),
@@ -2058,7 +2094,7 @@ if (!app.requestSingleInstanceLock()) {
     tray.on('balloon-closed', () => watchLog('balloon closed'))
     tray.on('balloon-click', () => {
       watchLog(`balloon clicked [${balloonProvider || '-'}]`)
-      if (balloonProvider) focusProvider(balloonProvider)
+      if (balloonTarget) focusTarget(balloonTarget)
     })
     tray.on('click', () => setPetVisible(!(win && win.isVisible())))
     tray.on('double-click', () => openSettings())

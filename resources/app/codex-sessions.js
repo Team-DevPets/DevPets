@@ -86,6 +86,8 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
       ignore: isSubagent(meta),
       originator: meta && meta.originator ? String(meta.originator) : '',
       sessionId: String((meta && (meta.id || meta.thread_id)) || path.basename(file).replace(/^rollout-/, '').replace(/\.jsonl$/i, '')).slice(0, 80),
+      source: meta && (meta.source === 'cli' || /codex_cli/i.test(meta.originator || '')) ? 'Codex' : 'Codex 앱',
+      cwd: meta && typeof meta.cwd === 'string' ? meta.cwd : '',
       project: projectName(meta && (meta.cwd || meta.project_path)),
       turn: null, // { id, startedAt, detail, lastAt }
       done: null, // { at, duration }
@@ -192,9 +194,9 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
       if (f.turn) {
         if (t - Math.max(f.mtimeMs, f.turn.lastAt) > OPEN_TURN_MAX_MS) continue
         // 진행 중인 동안은 '지금' 소식으로 둔다 (생각만 오래 해도 쉬는 중으로 바뀌지 않게)
-        list.push({ mood: 'working', detail: f.turn.detail, at: t, eventAt: f.turn.lastAt, since: f.turn.startedAt, source: 'Codex 앱', sessionId: f.sessionId, project: f.project })
+        list.push({ mood: 'working', detail: f.turn.detail, at: t, eventAt: f.turn.lastAt, since: f.turn.startedAt, source: f.source, cwd: f.cwd, sessionId: f.sessionId, project: f.project })
       } else if (f.done && t - f.done.at <= DONE_KEEP_MS) {
-        list.push({ mood: 'done', detail: '', at: f.done.at, eventAt: f.done.at, duration: f.done.duration, source: 'Codex 앱', sessionId: f.sessionId, project: f.project })
+        list.push({ mood: 'done', detail: '', at: f.done.at, eventAt: f.done.at, duration: f.done.duration, source: f.source, cwd: f.cwd, sessionId: f.sessionId, project: f.project })
       }
     }
     return list
