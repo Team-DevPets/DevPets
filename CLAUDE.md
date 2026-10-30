@@ -1,23 +1,23 @@
 # 우사기 펫 (UsagiPet) — Claude Code 작업 안내
 
 Windows 바탕화면 위에 떠 있는 우사기(치이카와) 펫. Claude 앱 · ChatGPT 앱 · Claude Code · Codex의 작업 상태를 보여 주고, 클릭·간식·춤 같은 상호작용을 한다.
-Electron 33.2.1 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 묶지 않음). 소스를 고치면 바로 실행본이 바뀐다.
+Electron 45 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 묶지 않음). 소스를 고치면 바로 실행본이 바뀐다.
 
-## 지금 상태 (2026-10-26)
+## 지금 상태 (2026-10-30)
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
 - **버전 0.4.21.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` ~ `v0.4.21`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
 - 0.4.21에서 확인 대기(`waiting`, 6줄) 그림을 새 그림으로 바꾸고(`add_rows.py --replace`), 숨쉬기를 쉬기와 같은 속도로 늦추고, 오른쪽 아래 **상태 점을 없앴다**. AI 상태는 AI 링과 상태 카드만으로 보여 준다.
 - 0.4.20에서 산책을 손봤다 — 열에 일곱은 잰걸음, 한 번에 300~600px. Electron 은 45로 올라갔고(uzinkkk, #8) 설치본도 45로 다시 만들어 뒀다.
-- 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.19에서 귀 팔랑을 49프레임(4.9초)으로 늘리고 대사를 "푸루 푸루~" · "푸루루루루루~!"로 바꿨다.
+- 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
-- **배포본 ZIP을 만들어 뒀다**: `release\UsagiPet-0.4.17-win32-x64.zip` (118MB). GitHub Releases 업로드는 민준이 직접 할 예정이라 **아직 안 올라갔다.**
-- 디스크에 `resources\app\node_modules`(276MB)와 `release`(397MB)가 있다. 둘 다 깃 바깥이라 지워도 되고, 지우면 다시 `npm install`해야 F5 실행·배포본 만들기가 된다.
+- 배포본 폴더(`release`)는 두지 않는다. 필요하면 `npm run package:win`으로 다시 만든다 (약 1분). GitHub Releases 는 아직 쓰지 않는다.
+- `resources\app\node_modules`(약 370MB, Electron 45 본체 포함)는 F5 실행·배포본 만들기에 필요해서 남겨 둔다. 지웠다가 다시 받을 때는 npm 11 이 설치 스크립트를 막으므로 `npm install` 뒤에 `node node_modules/electron/install.js` 도 실행해야 Electron 본체가 생긴다.
 - **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). 깃이 막아 주지는 않는다 — Free 플랜 + 비공개 레포라 브랜치 보호를 쓸 수 없다.
 - 멤버는 hodu42(admin) · uzinkkk(write) 둘이다. **PR 을 올리기 직전에 `main`을 pull 받아 작업 브랜치에 반영한다.**
-- 안 한 일: Electron 33.2.1에 high 2건 취약점 경고가 뜨지만 올리지 않았다. 올리면 창·트레이·알림·토스트를 전부 다시 확인해야 한다.
+- 작업을 시작하기 전에 `git fetch` 후 `git branch -r` 로 다른 사람이 작업 중인 브랜치를 보고, `git diff --stat main...origin/<브랜치>` 로 그 브랜치가 건드리는 파일과 겹치지 않는지 확인한다. 겹치면 그 PR 이 머지된 뒤에 하는 편이 충돌이 적다.
 - 남은 아이디어는 맨 아래 "남은 아이디어" 항목에 있다.
 
 ## 사용자와 일하는 방식
@@ -43,7 +43,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
   dev\sprite-tools\add_rows.py   새 동작 그림을 시트에 붙이는 도구 (Python)
   dev\sprite-sources\            지금 시트의 원본 그림 (춤 3장 · 귀 팔랑 2장 · 확인 대기 1장)
   resources\app\                 ★ 앱 소스
-    package.json                 버전 (지금 0.4.17), npm test · npm run package:win
+    package.json                 버전 · npm test · npm run package:win
     main.js                      메인 프로세스: 창·시트 인식·드래그·산책·상태 감지·알림·트레이·설정 창
     llm-status.js                AI 상태 합치기 규칙 (우선순위: waiting > error > working > done)
     codex-sessions.js            ChatGPT(Codex) 앱 작업 기록 ~/.codex/sessions/**/rollout-*.jsonl 읽기
@@ -64,7 +64,7 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
 
 - 커밋 메시지 · 브랜치 · PR · 태그 규칙은 [깃-규칙.md](깃-규칙.md)에 정리해 두었다. **작업은 `<타입>/<설명>` 브랜치에서 하고 PR(Squash and merge)로 합친다. main 에는 직접 푸시하지 않는다** (문서 한 줄이라도 PR 로). **PR 을 올리기 직전에 `git switch main && git pull` → 작업 브랜치에서 `git merge main`** 으로 최신으로 맞춘다. 버전을 올리는 커밋은 `release: 0.4.20 — 제목` 형식으로 적고, 머지된 뒤 `v0.4.20` 태그를 붙인다.
 - 레포: [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) (main 브랜치). 이 폴더가 그대로 레포다.
-- Electron 런타임(`UsagiPet.exe` · dll · locales), `logs\`, `.claude\`, `release\`는 `.gitignore`로 뺀다. GitHub는 파일 한 개를 100MB까지만 받으므로 180MB인 실행 파일은 올릴 수 없다.
+- Electron 런타임(`UsagiPet.exe` · dll · locales), `logs\`, `.claude\`, `release\`는 `.gitignore`로 뺀다. GitHub는 파일 한 개를 100MB까지만 받으므로 200MB가 넘는 실행 파일(`UsagiPet.exe`)은 올릴 수 없다.
 - 클론한 사람은 `resources\app`에서 `npm install` → `npm start`. 시트는 `resources\app\pets`에서 찾으니 루트 `pets`를 복사하거나 junction으로 연결해야 춤·싸움이 나온다.
 
 ## 실행 · 재시작 · 확인 방법
