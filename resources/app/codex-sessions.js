@@ -74,6 +74,7 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
     try { meta = JSON.parse(readFirstLine(file)).payload || null } catch {}
     const f = {
       file,
+      taskId: 'codex:' + (meta && meta.id || path.basename(file, '.jsonl')),
       offset: isNew ? 0 : Math.max(0, size - FIRST_TAIL_BYTES),
       rest: '',
       skipPartial: !isNew && size > FIRST_TAIL_BYTES,
@@ -184,9 +185,9 @@ function createCodexSessionWatcher({ root = defaultRoot(), log = () => {}, now =
       if (f.turn) {
         if (t - Math.max(f.mtimeMs, f.turn.lastAt) > OPEN_TURN_MAX_MS) continue
         // 진행 중인 동안은 '지금' 소식으로 둔다 (생각만 오래 해도 쉬는 중으로 바뀌지 않게)
-        list.push({ mood: 'working', detail: f.turn.detail, at: t, since: f.turn.startedAt, source: 'Codex 앱' })
+        list.push({ taskId: f.taskId, mood: 'working', detail: f.turn.detail, at: t, since: f.turn.startedAt, source: 'Codex 앱' })
       } else if (f.done && t - f.done.at <= DONE_KEEP_MS) {
-        list.push({ mood: 'done', detail: '', at: f.done.at, duration: f.done.duration, source: 'Codex 앱' })
+        list.push({ taskId: f.taskId, mood: 'done', detail: '', at: f.done.at, duration: f.done.duration, source: 'Codex 앱' })
       }
     }
     return list

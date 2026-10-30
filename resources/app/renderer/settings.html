@@ -150,6 +150,13 @@
   .bigtime { font-size: 24px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .clip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  .task-section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .task-list { max-height: 320px; overflow-y: auto; }
+  .task-list[hidden] { display: none; }
+  .task-row { padding: 12px 0; border-bottom: 1px solid var(--hair); }
+  .task-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .task-detail { overflow-wrap: anywhere; white-space: pre-line; }
+
   /* AI 연결 */
   .attn { display: flex; flex-direction: row; flex-wrap: wrap; overflow: hidden; padding: 0; gap: 0; border-color: #EDB7C0; }
   .attn > .stage { flex: 0 0 220px; min-height: 260px; background: #FCE3E6; }
