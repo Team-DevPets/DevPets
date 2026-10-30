@@ -138,6 +138,10 @@
   .sleep-bubble { z-index: 3; }
   .sleep-bubble > span { display: block; width: 100%; height: 100%; box-sizing: border-box; border: 1px solid rgba(105,155,177,.85); border-radius: 50% 50% 50% 8%; background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0 10%, rgba(211,240,250,.48) 18% 62%, rgba(181,221,239,.6)); transform-origin: 0 100%; animation: sleepBreath 3.6s ease-in-out infinite; }
   @keyframes sleepBreath { 0%,100% { transform: scale(.28); } 50% { transform: scale(1); } }
+  .sleep-bubble.popping > span { animation: sleepPop .34s ease-out forwards; }
+  @keyframes sleepPop { 0% { transform: scale(var(--pop-start, .6)); opacity: 1; } 40% { transform: scale(1.22); opacity: .9; } 65%,100% { transform: scale(1.4); opacity: 0; } }
+  .sleep-bubble .pop-drop { position: absolute; left: 50%; top: 50%; width: 2px; height: 3px; border-radius: 50%; background: #b4d9e9; opacity: 0; animation: sleepPopDrop .24s .10s ease-out forwards; }
+  @keyframes sleepPopDrop { 0% { opacity: 0; transform: translate(0,0) scale(.4); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--pop-x),var(--pop-y)) scale(.3); } }
   #sprite.dancing { animation: dance .52s ease-in-out infinite; }
   @keyframes dance { 0%,100% { transform: translateX(-50%) rotate(-7deg) translateY(0); } 25% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } 50% { transform: translateX(-50%) rotate(7deg) translateY(0); } 75% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } }
   #sprite.huff { animation: huff .32s linear 3; }
@@ -150,7 +154,7 @@
   .blanket.off { opacity: 0; transform: translate(-10%, 10px) rotate(14deg); }
   .blanket.breathe svg { animation: breathe2 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
   @keyframes breathe2 { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(1.05); } }
-  @media (prefers-reduced-motion: reduce) { #sprite.dancing, #sprite.huff, .sleep-bubble > span, .blanket.breathe svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #sprite.dancing, #sprite.huff, .sleep-bubble > span, .sleep-bubble.popping > span, .sleep-bubble .pop-drop, .blanket.breathe svg { animation: none; } }
 </style>
 </head>
 <body>
@@ -1156,11 +1160,31 @@
     blanket.style.lineHeight = '0'
     addSleepBubble()
   }
+  function popSleepBubble() {
+    for (const bubble of document.querySelectorAll('.sleep-bubble:not(.popping)')) {
+      const face = bubble.querySelector('span')
+      const transform = face ? getComputedStyle(face).transform : 'none'
+      const scale = transform === 'none' ? 1 : new DOMMatrixReadOnly(transform).a
+      bubble.style.setProperty('--pop-start', String(scale))
+      bubble.classList.add('popping')
+      // Short droplets make the expanding bubble read as a pop, not a fade.
+      for (let i = 0; i < 6; i++) {
+        const angle = i * Math.PI / 3
+        const drop = document.createElement('i')
+        drop.className = 'pop-drop'
+        drop.style.setProperty('--pop-x', Math.cos(angle) * 12 + 'px')
+        drop.style.setProperty('--pop-y', Math.sin(angle) * 10 + 'px')
+        bubble.appendChild(drop)
+      }
+      // Also clean up when reduced-motion disables animation events.
+      setTimeout(() => bubble.remove(), 380)
+    }
+  }
   function wake(greet = true) {
     if (!napped) return
     napped = false
     window.pet.setNapping(false)
-    for (const el of document.querySelectorAll('.sleep-bubble')) el.remove()
+    popSleepBubble()
     for (const el of document.querySelectorAll('.blanket')) { el.classList.add('off'); setTimeout(() => el.remove(), 550) }
     $('sprite').classList.add('waking')
     $('sprite').classList.remove('napping')
