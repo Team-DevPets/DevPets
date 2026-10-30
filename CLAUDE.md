@@ -7,7 +7,8 @@ Electron 45 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.22.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main` (공개 레포). 태그는 버전마다 `v<버전>` — 목록은 `git tag`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
+- **버전 0.4.24.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main` (공개 레포). 태그는 버전마다 `v<버전>` — 목록은 `git tag`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
+- 0.4.24에서 도토리 닦기(26번째 줄, 32프레임/8fps)와 도라야끼 낮잠(27번째 줄, 고정 그림)을 추가했다. 낮잠은 눈 뜬 옆누운 얼굴과 둥근 도라야끼이며 코의 잠방울만 3.6초 주기로 커졌다 작아진다. Z 효과는 제거했다.
 - 0.4.22에서 배포를 GitHub Releases 로 바꿨다 — `package:win` 이 ZIP 까지 만들고 `release:win` 이 태그 붙은 버전을 올린다. Claude Code 를 데스크톱 앱으로 잘못 알아보던 감지도 고쳐졌다 (uzinkkk, #13).
 - 0.4.21에서 확인 대기(`waiting`, 6줄) 그림을 새 그림으로 바꾸고(`add_rows.py --replace`), 숨쉬기를 쉬기와 같은 속도로 늦추고, 오른쪽 아래 **상태 점을 없앴다**. AI 상태는 AI 링과 상태 카드만으로 보여 준다.
 - 0.4.20에서 산책을 손봤다 — 열에 일곱은 잰걸음, 한 번에 300~600px. Electron 은 45로 올라갔고(uzinkkk, #8) 설치본도 45로 다시 만들어 뒀다.

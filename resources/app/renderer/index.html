@@ -135,8 +135,9 @@
   @keyframes spark { 0% { opacity: 0; transform: scale(.4); } 40% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: scale(.6) translateY(-8px); } }
   .anger { font-size: 16px; animation: anger .9s ease-out forwards; }
   @keyframes anger { 0% { opacity: 0; transform: scale(.4); } 30% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1); } }
-  .zzz { font: 14px/1 "Jua", sans-serif; color: #78675C; animation: zzz 2.4s ease-out infinite; }
-  @keyframes zzz { 0% { opacity: 0; transform: translate(0, 0) scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(14px, -30px) scale(1.15); } }
+  .sleep-bubble { z-index: 3; }
+  .sleep-bubble > span { display: block; width: 100%; height: 100%; box-sizing: border-box; border: 1px solid rgba(105,155,177,.85); border-radius: 50% 50% 50% 8%; background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0 10%, rgba(211,240,250,.48) 18% 62%, rgba(181,221,239,.6)); transform-origin: 0 100%; animation: sleepBreath 3.6s ease-in-out infinite; }
+  @keyframes sleepBreath { 0%,100% { transform: scale(.28); } 50% { transform: scale(1); } }
   #sprite.dancing { animation: dance .52s ease-in-out infinite; }
   @keyframes dance { 0%,100% { transform: translateX(-50%) rotate(-7deg) translateY(0); } 25% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } 50% { transform: translateX(-50%) rotate(7deg) translateY(0); } 75% { transform: translateX(-50%) rotate(0deg) translateY(-6px); } }
   #sprite.huff { animation: huff .32s linear 3; }
@@ -149,7 +150,7 @@
   .blanket.off { opacity: 0; transform: translate(-10%, 10px) rotate(14deg); }
   .blanket.breathe svg { animation: breathe2 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
   @keyframes breathe2 { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(1.05); } }
-  @media (prefers-reduced-motion: reduce) { #sprite.dancing, #sprite.huff, .zzz, .blanket.breathe svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #sprite.dancing, #sprite.huff, .sleep-bubble > span, .blanket.breathe svg { animation: none; } }
 </style>
 </head>
 <body>
@@ -449,6 +450,7 @@
       visiblePet = { top: c.offsetTop + height - 6 - fit.maxExtent * scale, bottom: c.offsetTop + height - 6, right: (width + w) / 2 }
       placeBubble()
     }
+    syncSleepBubble()
     updateInteractive()
   }
   function spriteTick() {
@@ -900,7 +902,7 @@
     danceFist: [['우 우나나 우나~', '주먹 콩콩! 신나게 춤추는 중']],
     danceSway: [['우나나 야하야하~~', '흔들흔들~ 신난다!']],
     danceCross: [['쁘릿!', '다리 꼬고 멋지게 마무리!']],
-    acorn: [['푸루루~', '도토리 반짝반짝 닦는 중'], ['후응…', '음, 좀 더 반짝이게']],
+    acorn: [['우나!', '뽀독뽀독']],
     acornDone: [['야하!', '반짝반짝해졌다!']],
     poke: [['하아?!', '그만 찔러!'], ['하아아?!', '뭐야, 짜증 나!']],
     flee: [['우라!', '으악, 도망가자!'], ['하아?! 우라!', '뭐야?! 튀자!']],
@@ -938,7 +940,7 @@
   function endPlay() {
     for (const t of playTimers) clearTimeout(t)
     playTimers = []
-    for (const el of document.querySelectorAll('.fx:not(.blanket):not(.zzz)')) el.remove()
+    for (const el of document.querySelectorAll('.fx:not(.blanket):not(.sleep-bubble)')) el.remove()
     $('sprite').classList.remove('dancing', 'huff')
     play = null
     reportPlaying()
@@ -1055,7 +1057,7 @@
     const drawn = !!anim('acorn') // 도토리 닦기 그림에는 도토리가 그려져 있다
     const acorn = drawn ? null : fxEl('acorn', '🌰', box.cx, box.bottom - box.height * 0.5)
     let end = 2900
-    if (drawn) end = loopReact('acorn', 0, 2800)
+    if (drawn) { react('acorn'); end = animMs('acorn') }
     else for (let i = 0; i < 3; i++) later(i * 900, () => react('review'))
     for (let i = 0; 300 + i * 400 < end; i++) {
       later(300 + i * 400, () => {
@@ -1096,6 +1098,33 @@
     sayPlay('flee')
   }
 
+  // The bubble's bottom-left tip stays attached to the nose while its size pulses.
+  function addSleepBubble() {
+    for (const old of document.querySelectorAll('.sleep-bubble')) old.remove()
+    const bubble = fxEl('sleep-bubble', '', 0, 0)
+    bubble.innerHTML = '<span aria-hidden="true"></span>'
+    syncSleepBubble()
+  }
+  function syncSleepBubble() {
+    const bubble = document.querySelector('.sleep-bubble')
+    if (!bubble || !napped) return
+    const canvas = $('sprite').getBoundingClientRect()
+    const stage = $('stage').getBoundingClientRect()
+    let x, y, size
+    if (anim('nap') && drawn) {
+      // Nose location in the rounded dorayaki illustration, relative to its alpha bounds.
+      x = canvas.left - stage.left + drawn.x + drawn.w * 0.224
+      y = canvas.top - stage.top + drawn.y + drawn.h * 0.59
+      size = Math.max(8, drawn.w * 0.13)
+    } else {
+      x = canvas.left - stage.left + canvas.width * 0.43
+      y = canvas.top - stage.top + canvas.height * 0.48
+      size = Math.max(8, canvas.width * 0.12)
+    }
+    bubble.style.left = x + 'px'
+    bubble.style.top = (y - size) + 'px'
+    bubble.style.width = bubble.style.height = size + 'px'
+  }
   function startNap() {
     if (napped || !config.sprite) return
     endPlay()
@@ -1104,11 +1133,8 @@
     const box = petBox()
     sayPlay('napStart')
     react(null) // 낮잠 그림이 있으면 여기서 그 그림이 돌기 시작한다 (spriteAnim)
-    const z0 = Math.round(box.height * 1.25)
     if (anim('nap')) {
-      const z = fxEl('zzz', 'Z', box.cx + z0 * 0.38, box.bottom - z0 * 0.62)
-      const z2 = fxEl('zzz', 'z', box.cx + z0 * 0.30, box.bottom - z0 * 0.56)
-      z2.style.animationDelay = '1.2s'
+      addSleepBubble()
       return
     }
     clearInterval(spriteTimer) // 첫 그림에서 멈춘 채 눕는다
@@ -1128,15 +1154,13 @@
       <path d="M8 31 Q60 40 112 31" fill="none" stroke="#7A4A22" stroke-width="2.4" stroke-linecap="round"/>
       <ellipse cx="44" cy="21" rx="12" ry="3" fill="#F3C27C" opacity=".7"/></svg>`
     blanket.style.lineHeight = '0'
-    const z = fxEl('zzz', 'Z', box.cx + w * 0.38, box.bottom - w * 0.62)
-    const z2 = fxEl('zzz', 'z', box.cx + w * 0.30, box.bottom - w * 0.56)
-    z2.style.animationDelay = '1.2s'
+    addSleepBubble()
   }
   function wake(greet = true) {
     if (!napped) return
     napped = false
     window.pet.setNapping(false)
-    for (const el of document.querySelectorAll('.zzz')) el.remove()
+    for (const el of document.querySelectorAll('.sleep-bubble')) el.remove()
     for (const el of document.querySelectorAll('.blanket')) { el.classList.add('off'); setTimeout(() => el.remove(), 550) }
     $('sprite').classList.add('waking')
     $('sprite').classList.remove('napping')
