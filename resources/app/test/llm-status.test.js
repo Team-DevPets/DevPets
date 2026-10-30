@@ -65,3 +65,48 @@ test('시간 표시', () => {
   assert.equal(formatDuration(120_000), '2분')
   assert.equal(formatDuration(3_900_000), '1시간 5분')
 })
+
+
+test('작업 목록은 같은 AI의 작업과 대기를 모두 집계하고 우선순위로 정렬한다', () => {
+  const t = createProviderTracker()
+  const entries = [
+    { ...e('Codex', 'working', T0), taskId: 'codex:a' },
+    { ...e('Codex', 'waiting', T0, '승인 필요'), taskId: 'codex:b' },
+    { ...e('Claude Code', 'working', T0), taskId: 'claude:c' },
+  ]
+  const gpt = t.update(entries, T0).providers.find(p => p.id === 'gpt')
+  assert.equal(gpt.state, 'waiting')
+  assert.deepEqual(gpt.tasks.map(t => t.id), ['codex:b', 'codex:a'])
+  assert.deepEqual(gpt.counts, { waiting: 1, error: 0, working: 1, done: 0 })
+})
+
+test('같은 Codex 세션의 hook과 기록은 중복 집계하지 않고 승인 대기를 보존한다', () => {
+  const t = createProviderTracker()
+  const result = t.update([
+    { ...e('Codex', 'waiting', T0), taskId: 'codex:a' },
+    { ...e('Codex 앱', 'working', T0 + 1000), taskId: 'codex:a', since: T0 - 5000 },
+  ], T0 + 1000).providers[0]
+  assert.equal(result.tasks.length, 1)
+  assert.equal(result.tasks[0].state, 'waiting')
+  assert.equal(result.counts.working, 0)
+})
+
+test('작업 시간은 도구 신호가 갱신돼도 유지하고 새 작업은 다시 잰다', () => {
+  const t = createProviderTracker()
+  const entry = (mood, at) => ({ ...e('Claude Code', mood, at), taskId: 'claude:a' })
+  t.update([entry('working', T0)], T0)
+  const updated = t.update([entry('working', T0 + 1000)], T0 + 1000)
+  assert.equal(updated.providers[0].tasks[0].since, T0)
+  t.update([entry('done', T0 + 2000)], T0 + 2000)
+  assert.equal(t.update([entry('working', T0 + 3000)], T0 + 3000).providers[0].tasks[0].since, T0 + 3000)
+})
+
+test('오래된 세션과 표시 시간이 지난 완료는 작업 목록에서 빠진다', () => {
+  const t = createProviderTracker()
+  const result = t.update([
+    { ...e('Codex', 'working', T0), taskId: 'codex:active' },
+    { ...e('Codex', 'working', T0 - 360000), taskId: 'codex:old' },
+    { ...e('Codex', 'done', T0 - DONE_SHOW_MS - 1), taskId: 'codex:done' },
+  ], T0).providers[0]
+  assert.deepEqual(result.tasks.map(t => t.id), ['codex:active'])
+})

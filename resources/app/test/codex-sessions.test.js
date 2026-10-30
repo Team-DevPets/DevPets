@@ -35,6 +35,7 @@ test('작업 시작 → 단계 → 완료를 따라간다', () => {
   assert.strictEqual(e.length, 1)
   assert.strictEqual(e[0].mood, 'working')
   assert.strictEqual(e[0].source, 'Codex 앱')
+  assert.strictEqual(e[0].taskId, 'codex:t1')
   write(file, [item('2026-10-22T03:00:03.000Z', 'u1', 'CommandExecution')])
   w.poll()
   assert.strictEqual(w.entries()[0].detail, '명령 실행')
@@ -44,6 +45,7 @@ test('작업 시작 → 단계 → 완료를 따라간다', () => {
   e = w.entries()
   assert.strictEqual(e[0].mood, 'done')
   assert.strictEqual(e[0].duration, 19000)
+  assert.strictEqual(e[0].taskId, 'codex:t1')
   assert.ok(!JSON.stringify(e).includes('비밀'), '대화 내용은 내보내지 않는다')
 })
 

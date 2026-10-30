@@ -366,6 +366,7 @@ function collectEntries() {
     if (!name.endsWith('.json')) continue
     const entry = readStatusFile(path.join(SESSIONS_DIR, name), name.startsWith('codex-') ? 'Codex' : 'Claude Code')
     if (!entry) continue
+    entry.taskId = name.startsWith('codex-') ? 'codex:' + name.slice(6, -5) : 'claude:' + name.slice(0, -5)
     entries.push(entry)
     markHookSeen(name.startsWith('codex-') ? 'codex' : 'claude')
   }
@@ -412,7 +413,7 @@ function watchStatus() {
   const tick = () => {
     const status = collectStatus()
     // 완료는 '사건'이라 시각까지 비교해야 연달아 끝난 작업에도 점프한다. 나머지는 바뀐 내용만 보낸다.
-    const providerKey = status.providers.map(p => `${p.id}:${p.state}:${p.since}:${p.detail}:${p.sources.join('+')}`).join(',')
+    const providerKey = status.providers.map(p => `${p.id}:${p.state}:${p.since}:${p.detail}:${p.sources.join('+')}:${JSON.stringify(p.tasks)}`).join(',')
     const key = `${status.mood}|${status.detail}|${status.mood === 'done' ? status.at : ''}|${status.sessions}|${status.sources.join(',')}|${providerKey}`
     if (key === last) return
     if (providerKey !== lastProviderLog) {

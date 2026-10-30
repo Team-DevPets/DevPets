@@ -65,10 +65,32 @@ function providerState(entries, providerId, now) {
 //   event:    { type: 'done', provider, label, source, duration } | { type: 'waiting'|'error', provider, label, source, detail }
 function createProviderTracker() {
   const prev = {}
+  const taskHistory = new Map()
   return {
     update(entries, now = Date.now()) {
       const providers = []
       const events = []
+      // hook과 작업 기록이 같은 세션을 가리키면 한 번만 표시한다.
+      const unique = new Map()
+      for (const entry of entries) {
+        if (!PROVIDER_OF[entry.source] || !isFresh(entry, now)) continue
+        if (entry.mood === 'done' && now - entry.at > DONE_SHOW_MS) continue
+        const id = entry.taskId || 'app:' + entry.source
+        const before = unique.get(id)
+        const urgent = e => e.mood === 'waiting' || e.mood === 'error'
+        if (!before || (urgent(entry) && !urgent(before)) ||
+            (urgent(entry) === urgent(before) && entry.at >= before.at)) unique.set(id, entry)
+      }
+      const tasks = [...unique].map(([id, entry]) => {
+        const before = taskHistory.get(id)
+        const restarted = before && before.state === 'done' && entry.mood !== 'done'
+        const since = Number(entry.since) || (before && !restarted ? before.since : entry.at)
+        const task = { id, source: entry.source, state: entry.mood, detail: entry.detail || '', since,
+          surface: PROVIDERS.find(p => p.id === PROVIDER_OF[entry.source]).surfaces[entry.source] }
+        taskHistory.set(id, task)
+        return task
+      }).sort((a, b) => MOOD_PRIORITY.indexOf(a.state) - MOOD_PRIORITY.indexOf(b.state) || a.id.localeCompare(b.id))
+      for (const id of taskHistory.keys()) if (!unique.has(id)) taskHistory.delete(id)
       for (const p of PROVIDERS) {
         const cur = providerState(entries, p.id, now)
         const before = prev[p.id] || { state: 'idle', since: now, source: '', jobStart: 0 }
@@ -89,6 +111,8 @@ function createProviderTracker() {
         prev[p.id] = { state: cur.state, since, source: cur.source || before.source, jobStart }
         if (cur.state !== 'idle') {
           providers.push({
+            tasks: tasks.filter(t => PROVIDER_OF[t.source] === p.id),
+            counts: Object.fromEntries(MOOD_PRIORITY.map(state => [state, tasks.filter(t => PROVIDER_OF[t.source] === p.id && t.state === state).length])),
             id: p.id,
             label: p.label,
             state: cur.state,

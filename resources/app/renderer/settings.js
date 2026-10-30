@@ -11,7 +11,7 @@ window.addEventListener('unhandledrejection', e => { try { api.reportError(`unha
 let state = null
 let sheet = null // { key, url, animations, refHeight, image }
 let page = 'home'
-const ui = { bubbleMode: 'ai', notifyKind: 'done', codexMsg: '', testMsg: '', testTimer: null }
+const ui = { bubbleMode: 'ai', notifyKind: 'done', tasksClaude: 'false', tasksGpt: 'false', codexMsg: '', testMsg: '', testTimer: null }
 
 const PAGES = [
   { id: 'home', label: '홈', icon: '<path d="M4 10.6 12 4l8 6.6V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1Z"/>' },
@@ -222,6 +222,27 @@ function providerCard(id, now) {
   return card
 }
 
+function taskList(id, now) {
+  const provider = ((state.status && state.status.providers) || []).find(p => p.id === id)
+  const tasks = provider && provider.tasks || []
+  if (!tasks.length) return ''
+  const counts = provider.counts || {}
+  const summary = ['waiting', 'error', 'working', 'done'].filter(s => counts[s]).map(s => `${MOOD_LABEL[s]} ${counts[s]}개`).join(' · ')
+  const key = id === 'claude' ? 'tasksClaude' : 'tasksGpt'
+  const open = ui[key] === 'true'
+  return `<div class="task-section">
+    <div class="sub">${esc(summary)}</div>
+    <button class="btn btn-quiet btn-sm pull-left" data-ui="${key}" data-value="${!open}" aria-expanded="${open}" aria-controls="tasks-${id}">작업 목록 ${open ? '접기' : '펼치기'}</button>
+    <div id="tasks-${id}" class="task-list"${open ? '' : ' hidden'}>${tasks.map((task, index) => {
+      const label = task.surface === 'app' && task.id.startsWith('app:') ? `${task.source} · 앱 감지` : `${task.source} · 세션 ${task.id.slice(-8)}`
+      return `<div class="task-row"><div class="task-heading"><b>${esc(label)}</b>${pill(task.state, MOOD_LABEL[task.state])}</div>
+        <div class="sub task-detail">${esc(prettyDetail(task.detail) || MOOD_LABEL[task.state])}</div>
+        <span class="sub">${task.state === 'done' ? '완료됨' : `${clock(now - task.since)}째`}</span></div>`
+    }).join('')}</div>
+    ${open ? '<p class="note">앱 감지는 창 전체의 대표 상태예요. 채팅별로 나누어 세지 않아요.</p>' : ''}
+  </div>`
+}
+
 function renderHome(now) {
   const hero = heroInfo(now)
   const [word, meaning] = HERO_WORD[hero.mood]
@@ -242,6 +263,7 @@ function renderHome(now) {
         <div class="row-text"><span class="bigtime">${esc(c.time)}</span><span class="sub clip">${esc(c.detail)}</span></div>
         <button class="btn btn-quiet btn-sm" data-act="focus" data-arg="${id}">${esc(c.action)}</button>
       </div>
+      ${taskList(id, now)}
     </article>`
   }).join('')
 
