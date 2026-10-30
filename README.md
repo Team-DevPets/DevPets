@@ -6,10 +6,10 @@
 
 ### Windows 배포본 — Node.js 없이 실행
 
-`UsagiPet-0.3.2-win32-x64.zip`을 **폴더째 압축 해제**하고 `UsagiPet.exe`를 실행하세요. 현재 우사기 v1.10, 차분한 동작, 16방향 시선, 고해상도 렌더링이 기본으로 포함되어 있습니다.
+[Releases](https://github.com/Team-DevPets/DevPets/releases)에서 최신 `UsagiPet-<버전>-win32-x64.zip`을 받아 **폴더째 압축 해제**하고 `UsagiPet.exe`를 실행하세요. 현재 우사기 v1.10, 차분한 동작, 16방향 시선, 고해상도 렌더링이 기본으로 포함되어 있습니다.
 
 ```text
-UsagiPet-0.3.2-win32-x64/
+UsagiPet-<버전>-win32-x64/
   UsagiPet.exe
   pets/                 ← 새 시트를 sprite.png로 넣는 곳
   resources/            ← 기본 이미지와 앱 파일
@@ -22,7 +22,7 @@ UsagiPet-0.3.2-win32-x64/
 
 ### 소스 코드로 실행 — 깃에서 클론한 경우
 
-[Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) 레포에는 **소스만** 들어 있습니다. Electron 런타임(`UsagiPet.exe`와 DLL들)은 파일 하나가 180MB로 GitHub의 100MB 제한을 넘어서 올리지 않았습니다. `npm install`이 받아 주므로 **Node.js 18 이상**만 설치되어 있으면 됩니다.
+[Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) 레포에는 **소스만** 들어 있습니다. Electron 런타임(`UsagiPet.exe`와 DLL들)은 파일 하나가 200MB를 넘어 GitHub의 100MB 제한에 걸려서 올리지 않았습니다. `npm install`이 받아 주므로 **Node.js 18 이상**만 설치되어 있으면 됩니다.
 
 ```bash
 git clone https://github.com/Team-DevPets/DevPets.git
@@ -62,22 +62,24 @@ node hooks/install.js
 
 `resources/app`에서 `npm run hooks`를 써도 같습니다 (0.4.17부터 루트의 `hooks/install.js`를 가리킵니다). 제거는 `npm run hooks:remove`입니다.
 
-### Windows 배포본 다시 만들기
+### Windows 배포본 만들기 · GitHub 에 올리기
 
-Windows x64에서 `resources/app`에 들어가 `npm install` 후 `npm run package:win`을 실행하세요. 레포 루트의 `release/UsagiPet-<버전>-win32-x64`에 실행 파일과 필요한 파일이 모두 생깁니다.
+받는 사람은 [Releases](https://github.com/Team-DevPets/DevPets/releases) 에서 `UsagiPet-<버전>-win32-x64.zip` 하나를 받아 **폴더째 풀고** `UsagiPet.exe` 를 실행하면 됩니다.
+
+**만드는 쪽** (Windows x64, `resources/app` 에서)
 
 ```bash
-cd resources/app
-npm install
-npm run package:win
+npm run package:win                 # 배포본 폴더 + ZIP 만들기 (레포 루트의 release/)
+npm run release:win -- --dry-run    # 무엇을 어떤 제목·본문으로 올릴지 미리 보기
+npm run release:win                 # 확인 → 배포본·ZIP 만들기 → GitHub Releases 에 올리기
 ```
 
-- Electron 런타임을 복사하고 `electron.exe`를 `UsagiPet.exe`로 바꾼 뒤, `resources/app`에 앱 소스를, 그 옆에 `pets` · `hooks` · `README.md` · `패치노트.md` · `시작하기.txt` · `업데이트-방법.txt`를 담습니다.
-- `node_modules`, 시트 백업(`sprite-before-*.png`), 개발용으로 넣어 둔 `resources/app/pets`는 담지 않습니다.
-- 같은 이름의 출력 폴더가 이미 있으면 멈춥니다. 지우고 다시 만들려면 `npm run package:win -- --force`를 쓰세요.
-- 아이콘은 Electron 기본 아이콘을 씁니다. 시작 메뉴 바로 가기와 알림용 앱 ID는 배포본을 처음 실행할 때 앱이 직접 만듭니다.
-
-배포할 때는 그 폴더 전체를 ZIP으로 묶으세요. 개인 설정과 개발용 `node_modules`는 배포본에 포함하지 않습니다.
+- `package:win` 은 Electron 런타임을 복사하고 `electron.exe` 를 `UsagiPet.exe` 로 바꾼 뒤, `resources/app` 에 앱 소스를, 그 옆에 `pets` · `hooks` · `README.md` · `패치노트.md` · `시작하기.txt` · `업데이트-방법.txt` 를 담고, 같은 이름의 `.zip` 으로 묶습니다. ZIP 을 풀면 폴더 하나가 나옵니다.
+  - `node_modules`, 시트 백업(`sprite-before-*.png`), 개발용 `resources/app/pets` 는 담지 않습니다.
+  - 출력이 이미 있으면 멈춥니다. 지우고 다시 만들려면 `-- --force`.
+- `release:win` 은 **main 에 머지되고 태그(`v<버전>`)가 붙은 버전만** 올립니다. 커밋 안 된 변경이 있거나, 원격에 태그가 없거나, 태그 뒤에 앱 코드가 바뀌었으면 멈춥니다 (문서 · 테스트 · 스크립트만 바뀐 건 괜찮습니다). 릴리스 제목과 본문은 `패치노트.md` 의 그 버전 항목에서 가져오고 받는 법을 덧붙입니다. 이미 있는 릴리스는 `-- --force` 로 ZIP 만 바꿔 올립니다. `gh` CLI 와 로그인(`gh auth login` 또는 `GH_TOKEN`)이 필요합니다.
+- 아이콘은 Electron 기본 아이콘입니다. 시작 메뉴 바로 가기와 알림용 앱 ID 는 배포본을 처음 실행할 때 앱이 직접 만듭니다.
+- 코드 서명을 하지 않아서, 받은 사람이 처음 실행할 때 Windows 가 "PC 보호" 경고를 띄웁니다. **추가 정보 → 실행** 으로 넘어갈 수 있습니다.
 
 ## 펫 이미지 바꾸기 — 가장 쉬운 방법
 
@@ -350,6 +352,16 @@ hooks/install.js     hooks 설치·제거
 ## 버전별 변경 내역
 
 사용자용 패치노트는 [패치노트.md](패치노트.md)에 버전마다 정리되어 있습니다. 아래는 설정 파일·기록 형식까지 담은 자세한 변경 기록입니다.
+
+## 0.4.22에서 바뀐 점
+
+- **배포를 GitHub Releases 로 바꿨습니다.** 레포를 공개로 바꿔서 누구나 받을 수 있습니다.
+  - `npm run package:win` 이 배포본 폴더와 함께 **`release/UsagiPet-<버전>-win32-x64.zip`** 도 만듭니다. Windows 에 들어 있는 `System32\tar.exe`(bsdtar)로 묶고, 앞 두 바이트가 `PK` 인지 확인합니다 (Git Bash 의 tar 는 GNU tar 라 이름만 .zip 인 tar 를 만듭니다). ZIP 안에는 폴더 하나만 들어갑니다. `--force` 는 폴더와 ZIP 을 함께 지우고 다시 만듭니다.
+  - **`npm run release:win`** (`scripts/release-win.js`) 을 새로 넣었습니다. 순서: 확인 → `package-win.js --force` → `gh release create v<버전> <ZIP> --verify-tag`.
+    - 확인하는 것: 커밋 안 된 변경이 없을 것, 원격에 `v<버전>` 태그가 있을 것, 지금 코드에 그 태그가 들어 있을 것, 태그 뒤에 앱에 들어가는 파일(`resources/app` · `pets` · `hooks`, 단 README · 패치노트 · `scripts` · `test` 는 빼고)이 바뀌지 않았을 것, `패치노트.md` 에 그 버전 항목이 있을 것, `gh` 로그인. 문제를 모두 모아서 한 번에 알려 줍니다.
+    - 제목은 `UsagiPet <패치노트 제목>`, 본문은 패치노트의 그 버전 항목 + 받는 법(폴더째 풀기, "PC 보호" 경고 넘기는 법).
+    - `--dry-run` 은 만들지도 올리지도 않고 계획만 보여 줍니다. `--force` 는 이미 있는 릴리스의 ZIP 만 `--clobber` 로 바꿔 올립니다.
+- **Claude Code 를 데스크톱 앱 감지에서 뺐습니다** (uzinkkk, #13). 새 `claude-app-path.js` 의 `CLAUDE_CLI_PATH`(`claude-code` · `node_modules` · `npm` · `.local\bin` 경로)를 `app-watch.ps1` 의 제외 규칙과 앱 실행 파일 · 아이콘 후보 고르기에 함께 씁니다. 자동 테스트가 15개에서 17개가 되었습니다.
 
 ## 0.4.21에서 바뀐 점
 
