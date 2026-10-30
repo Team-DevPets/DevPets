@@ -86,18 +86,18 @@ const DEFAULT_SPRITE_OPTIONS = {
   // ear: 23~25번째 줄을 이어 붙인 "귀 팔랑" — 귀를 좌우로 팔랑팔랑(23,24) → 귀를 쫑긋 세우고 휙휙(25).
   //   팔랑 두 번 + 쫑긋 세 번으로 49프레임(10fps, 약 4.9초). 대사는 부분마다 한 번씩만 나온다.
   //   원본 그림 두 장을 한 동작으로 이었다. 중간에 크기가 튀지 않게 둘 다 같은 배율로 붙였다 (add_rows.py --scale 0.5603).
-  // 다른 상호작용 그림(먹기 eat · 도토리 acorn · 낮잠 nap · 반기기 greet · 잰걸음 dash)은 줄을 붙인 뒤
+  // 다른 상호작용 그림(먹기 eat · 반기기 greet · 잰걸음 dash)은 줄을 붙인 뒤
   // pets/sprite.json 의 rows 로 줄 번호를 정해 준다 (예: { "rows": { "eat": 22, "nap": [23, 24] } }, 0부터 셈). 없는 줄을 가리키면 그 동작은 효과로 대신한다.
   rows: { idle: 0, walk: 1, walkLeft: 2, dragging: 3, done: 4, error: 5, waiting: 6, working: 7, review: 8, fight: [11, 12, 13, 14], dance: [
     { row: 15, frames: DANCE_FIST_ORDER, say: 'danceFist' },
     { row: 16, say: 'danceSway' }, 17, 18, 19, 20,
     { row: 21, frames: DANCE_LEGS_ORDER, say: { [DANCE_LEGS_ORDER.indexOf(5)]: 'danceCross' } }, // 다리를 꼬기 시작할 때 "쁘릿!"
-  ], ear: [
+  ], nap: 26, acorn: [{ row: 25, frames: [...Array.from({ length: 7 }, () => [0, 1, 2, 3]).flat(), 4, 4, 4, 4] }], ear: [
     { row: 22, say: 'earFlap' }, 23, 22, 23, // 팔랑팔랑 두 번 (14프레임 × 2)
     { row: 24, say: 'earPerk' }, 24, 24, // 쫑긋 세우고 휙휙 세 번 (7프레임 × 3)
   ] },
   fps: 6,
-  fpsByMood: { walk: 10, done: 8, fight: 10, eat: 6, dance: 10, acorn: 6, nap: 3, greet: 8, dash: 12, ear: 10 },
+  fpsByMood: { walk: 10, done: 8, fight: 10, eat: 6, dance: 10, acorn: 8, nap: 2, greet: 8, dash: 12, ear: 10 },
   height: 120,
 }
 const MOOD_ORDER = ['idle', 'working', 'waiting', 'done', 'error', 'walk']

@@ -25,3 +25,6 @@ logs/
 
 # 시트 도구가 만드는 미리보기
 dev/sprite-tools/preview-*.png
+
+# Local development link to the root pet sheets
+/resources/app/pets/

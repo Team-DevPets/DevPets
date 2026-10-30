@@ -1,6 +1,6 @@
 {
   "name": "claude-desk-pet",
-  "version": "0.4.22",
+  "version": "0.4.24",
   "description": "바탕화면 위에 항상 떠 있는 작은 펫. 클릭하면 쓰다듬고, 더블클릭하면 Claude 앱을 엽니다.",
   "main": "main.js",
   "scripts": {
