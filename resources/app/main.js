@@ -5,6 +5,7 @@ const { spawn, execFile } = require('child_process')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const { CLAUDE_CLI_PATH, isClaudeCli } = require('./claude-app-path')
 
 const WINDOW_WIDTH = 180
 const BASE_WINDOW_HEIGHT = 340 // 기본 크기(90px)일 때의 창 높이. 펫 위쪽은 말풍선·AI 상태 카드 자리. 펫이 커지면 위쪽으로 늘어난다.
@@ -1115,7 +1116,7 @@ const WATCHED_APPS = [
     label: 'Claude 앱',
     option: 'watchClaudeApp',
     procs: ['claude'],
-    exclude: '\\\\\\.local\\\\bin\\\\|\\\\node_modules\\\\|\\\\npm\\\\', // Claude Code CLI(claude.exe)는 hooks로 따로 연결
+    exclude: CLAUDE_CLI_PATH.source, // Claude Code CLI는 데스크톱 앱 감지에서 제외
     re: '^(stop|stop response|stop generating|stop responding|stop task|응답 중지|응답 중단|생성 중지|중지|정지|멈추기)$',
     approve: '^(허용|항상 허용|한 번 허용|이번만 허용|이번 한 번만 허용|승인|allow|allow once|always allow|approve)$',
     // 답이 끝나면 답 아래에 생기는 버튼. 중지 버튼이 사라질 때 이 버튼 수가 늘었으면 기다리지 않고 바로 완료로 본다.
@@ -1240,7 +1241,7 @@ function handleAppReading(s, t) {
     watchLog(`[${s.key}] app=${s.app} window=${s.window}${s.hidden ? ' (hidden)' : ''} fg=${s.fg} busy=${s.busy} label=${s.label || '-'} approve=${s.approve || '-'} done=${s.doneCount ?? '-'} cpu=${s.cpu} scanMs=${s.scanMs}${cands.length ? ` candidates=${JSON.stringify(cands)}` : ''}`)
   }
   t.lastKey = key
-  if (s.exe && s.exe !== appExe[s.key]) {
+  if (s.exe && !(s.key === 'claude' && isClaudeCli(s.exe)) && s.exe !== appExe[s.key]) {
     appExe[s.key] = s.exe
     // 다음 실행 때 앱 아이콘을 바로 보여 주고, 앱이 꺼져 있어도 알림·아이콘으로 열 수 있게 기억해 둔다.
     config.appExe = { ...(config.appExe || {}), [s.key]: s.exe }
@@ -1314,7 +1315,7 @@ function llmExeCandidates(llm) {
     ? [path.join(local, 'AnthropicClaude', 'claude.exe'), path.join(local, 'Programs', 'Claude', 'Claude.exe')]
     : [path.join(local, 'Programs', 'ChatGPT', 'ChatGPT.exe'), path.join(local, 'Programs', 'Codex', 'Codex.exe')]
   const remembered = config.appExe && typeof config.appExe[LLM_APP_KEY[llm]] === 'string' ? config.appExe[LLM_APP_KEY[llm]] : ''
-  return [...new Set([appExe[LLM_APP_KEY[llm]], remembered, ...known])].filter(p => p && fs.existsSync(p))
+  return [...new Set([appExe[LLM_APP_KEY[llm]], remembered, ...known])].filter(p => p && !(llm === 'claude' && isClaudeCli(p)) && fs.existsSync(p))
 }
 
 function customIconPath(llm) {
