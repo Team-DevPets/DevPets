@@ -7,15 +7,16 @@ Electron 45 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 
 
 새 대화를 여기서 시작했다면 이 항목부터 읽으면 된다. 버전을 올릴 때 같이 갱신한다.
 
-- **버전 0.4.21.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main`, 태그 `v0.4.16` ~ `v0.4.21`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
+- **버전 0.4.22.** 깃은 [Team-DevPets/DevPets](https://github.com/Team-DevPets/DevPets) `main` (공개 레포). 태그는 버전마다 `v<버전>` — 목록은 `git tag`. (아직 안 올린 변경이 있는지는 `git log origin/main..` 과 `git status` 로 본다 — 이 항목에 "안 올렸다"고 적어 두면 올린 뒤 바로 거짓말이 된다.)
+- 0.4.22에서 배포를 GitHub Releases 로 바꿨다 — `package:win` 이 ZIP 까지 만들고 `release:win` 이 태그 붙은 버전을 올린다. Claude Code 를 데스크톱 앱으로 잘못 알아보던 감지도 고쳐졌다 (uzinkkk, #13).
 - 0.4.21에서 확인 대기(`waiting`, 6줄) 그림을 새 그림으로 바꾸고(`add_rows.py --replace`), 숨쉬기를 쉬기와 같은 속도로 늦추고, 오른쪽 아래 **상태 점을 없앴다**. AI 상태는 AI 링과 상태 카드만으로 보여 준다.
 - 0.4.20에서 산책을 손봤다 — 열에 일곱은 잰걸음, 한 번에 300~600px. Electron 은 45로 올라갔고(uzinkkk, #8) 설치본도 45로 다시 만들어 뒀다.
 - 0.4.19에서 귀 팔랑을 49프레임(4.9초)으로 늘리고 대사를 "푸루 푸루~" · "푸루루루루루~!"로 바꿨다.
 - 0.4.18에서 **귀 팔랑(`ear`)** 동작을 더했다 — 시트 22·23·24줄, 설정 창 상호작용에 카드가 있다. `add_rows.py`에 `--fit` · `--area` · `--scale` 옵션도 함께 들어갔다.
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
-- 배포본 폴더(`release`)는 두지 않는다. 필요하면 `npm run package:win`으로 다시 만든다 (약 1분). GitHub Releases 는 아직 쓰지 않는다.
+- **배포는 GitHub Releases 로 한다.** 태그를 붙인 뒤 `resources\app` 에서 `npm run release:win` 하나로 배포본·ZIP 을 만들어 올린다 (`-- --dry-run` 으로 미리 보기). 만들고 난 `release` 폴더는 지워도 된다.
 - `resources\app\node_modules`(약 370MB, Electron 45 본체 포함)는 F5 실행·배포본 만들기에 필요해서 남겨 둔다. 지웠다가 다시 받을 때는 npm 11 이 설치 스크립트를 막으므로 `npm install` 뒤에 `node node_modules/electron/install.js` 도 실행해야 Electron 본체가 생긴다.
-- **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). 깃이 막아 주지는 않는다 — Free 플랜 + 비공개 레포라 브랜치 보호를 쓸 수 없다.
+- **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). 레포가 공개라 GitHub 브랜치 보호를 켤 수 있다 (켜져 있는지는 Settings → Branches).
 - 멤버는 hodu42(admin) · uzinkkk(write) 둘이다. **PR 을 올리기 직전에 `main`을 pull 받아 작업 브랜치에 반영한다.**
 - 작업을 시작하기 전에 `git fetch` 후 `git branch -r` 로 다른 사람이 작업 중인 브랜치를 보고, `git diff --stat main...origin/<브랜치>` 로 그 브랜치가 건드리는 파일과 겹치지 않는지 확인한다. 겹치면 그 PR 이 머지된 뒤에 하는 편이 충돌이 적다.
 - 남은 아이디어는 맨 아래 "남은 아이디어" 항목에 있다.
@@ -53,8 +54,9 @@ UsagiPet-win32-x64\              ← Claude Code를 여기서 연다
     renderer\index.html          펫 화면: 그림 그리기·시선·말풍선·상호작용 엔진 (HTML+CSS+JS 한 파일)
     renderer\settings.html/.js   설정 창(컨트롤센터)
     renderer\fonts\              Jua · Noto Sans KR (오프라인용)
-    scripts\package-win.js       Windows 배포본 만들기 (npm run package:win)
-    test\                        node --test 자동 테스트 15개
+    scripts\package-win.js       Windows 배포본·ZIP 만들기 (npm run package:win)
+    scripts\release-win.js       GitHub Releases 에 올리기 (npm run release:win)
+    test\                        node --test 자동 테스트
     assets\default-pet.png       내장 기본 우사기 시트
 ```
 
