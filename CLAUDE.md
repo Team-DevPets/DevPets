@@ -16,7 +16,7 @@ Electron 45 앱이며, **이 폴더가 곧 설치본이자 소스**다 (asar로 
 - 0.4.17에서 고친 것은 **개발용 명령 두 개뿐**이다 — `npm run package:win`(`scripts\package-win.js`를 새로 작성)과 `npm run hooks`(경로를 `..\..\hooks\install.js`로).
 - **배포는 GitHub Releases 로 한다.** 태그를 붙인 뒤 `resources\app` 에서 `npm run release:win` 하나로 배포본·ZIP 을 만들어 올린다 (`-- --dry-run` 으로 미리 보기). 만들고 난 `release` 폴더는 지워도 된다.
 - `resources\app\node_modules`(약 370MB, Electron 45 본체 포함)는 F5 실행·배포본 만들기에 필요해서 남겨 둔다. 지웠다가 다시 받을 때는 npm 11 이 설치 스크립트를 막으므로 `npm install` 뒤에 `node node_modules/electron/install.js` 도 실행해야 Electron 본체가 생긴다.
-- **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). 레포가 공개라 GitHub 브랜치 보호를 켤 수 있다 (켜져 있는지는 Settings → Branches).
+- **main에는 직접 푸시하지 않는다.** 문서 한 줄도 브랜치 → PR → Squash merge 로 넣는다 ([깃-규칙.md](깃-규칙.md)). GitHub Ruleset `Protect main`(Settings → Rules → Rulesets)이 막아 준다 — PR 필수(승인 0명) · 강제 푸시·삭제 금지. 승인 수를 1로 올리면 혼자 올린 PR을 머지할 수 없다.
 - 멤버는 hodu42(admin) · uzinkkk(write) 둘이다. **PR 을 올리기 직전에 `main`을 pull 받아 작업 브랜치에 반영한다.**
 - 작업을 시작하기 전에 `git fetch` 후 `git branch -r` 로 다른 사람이 작업 중인 브랜치를 보고, `git diff --stat main...origin/<브랜치>` 로 그 브랜치가 건드리는 파일과 겹치지 않는지 확인한다. 겹치면 그 PR 이 머지된 뒤에 하는 편이 충돌이 적다.
 - 남은 아이디어는 맨 아래 "남은 아이디어" 항목에 있다.
